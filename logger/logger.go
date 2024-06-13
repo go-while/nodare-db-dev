@@ -15,7 +15,7 @@ const (
 	MAXSIZE = 100 * 1024 * 1024 // 100 MB
 )
 
-type iLOG inteface {
+type iLOG interface {
 	OpenLogFile(filename string)
 	CloseLogFile()
 	Error(format string, args ...any)

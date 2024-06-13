@@ -1,3 +1,3 @@
 
 # nodare-db ==> nodare-db-dev
-# sed -i 's/nodare-db/nodare-db-dev/g' *.go */*.go
+# find . -name "*.go" -exec sed -i 's/nodare-db/nodare-db-dev/g' {}
