@@ -2,9 +2,9 @@ package main
 
 import (
 	"github.com/go-while/go-cpu-mem-profiler"
-	"github.com/go-while/nodare-db/database"
-	"github.com/go-while/nodare-db/logger"
-	"github.com/go-while/nodare-db/server"
+	"github.com/go-while/nodare-db-dev/database"
+	"github.com/go-while/nodare-db-dev/logger"
+	"github.com/go-while/nodare-db-dev/server"
 	"log"
 )
 

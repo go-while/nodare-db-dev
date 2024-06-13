@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/go-while/nodare-db/logger"
+	"github.com/go-while/nodare-db-dev/logger"
 	"log"
 	"os"
 	"strconv"

@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	pcas "github.com/go-while/nodare-db/pcas_hash"
+	pcas "github.com/go-while/nodare-db-dev/pcas_hash"
 )
 
 //const MOD = 10 // last 1 digit

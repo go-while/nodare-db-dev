@@ -2,8 +2,8 @@ package server
 
 import (
 	"encoding/json"
-	"github.com/go-while/nodare-db/database"
-	"github.com/go-while/nodare-db/logger"
+	"github.com/go-while/nodare-db-dev/database"
+	"github.com/go-while/nodare-db-dev/logger"
 	"net/http"
 )
 

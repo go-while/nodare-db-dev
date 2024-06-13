@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-while/nodare-db/client/clilib"
+	"github.com/go-while/nodare-db-dev/client/clilib"
 	"log"
 	"os"
 	"sync"

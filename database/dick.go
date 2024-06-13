@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/dchest/siphash"
-	"github.com/go-while/nodare-db/logger"
+	"github.com/go-while/nodare-db-dev/logger"
 	//"log"
 	"hash/fnv"
 	"math/rand"

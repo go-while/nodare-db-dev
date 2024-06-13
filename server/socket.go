@@ -3,8 +3,8 @@ package server
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/go-while/nodare-db/logger"
-	"github.com/go-while/nodare-db/utils"
+	"github.com/go-while/nodare-db-dev/logger"
+	"github.com/go-while/nodare-db-dev/utils"
 	"log"
 	"net"
 	"net/textproto"
@@ -143,7 +143,7 @@ func (c *SOCKET) handleSocketConn(conn net.Conn, raddr string, socket bool) {
 	tp := textproto.NewConn(conn)
 	if !socket {
 		// send welcome banner to incoming tcp connection
-		err := tp.PrintfLine("200 nodare-db")
+		err := tp.PrintfLine("200 NDB")
 		if err != nil {
 			return
 		}

@@ -2,7 +2,7 @@ package server
 
 import (
 	"github.com/go-while/go-cpu-mem-profiler"
-	"github.com/go-while/nodare-db/logger"
+	"github.com/go-while/nodare-db-dev/logger"
 )
 
 const DEFAULT_PW_LEN = 32 // admin/username:password
@@ -19,7 +19,7 @@ const DEFAULT_LOGLEVEL_INT = ilog.INFO
 const DEFAULT_SERVER_ADDR = "[::1]"
 const DEFAULT_SERVER_TCP_PORT = "2420"
 const DEFAULT_SERVER_UDP_PORT = "2240"
-const DEFAULT_SERVER_SOCKET_PATH = "/tmp/nodare-db.socket"
+const DEFAULT_SERVER_SOCKET_PATH = "/tmp/nodare-db-dev.socket"
 const DEFAULT_SERVER_SOCKET_TCP_PORT = "3420"
 const DEFAULT_SERVER_SOCKET_TLS_PORT = "4420"
 

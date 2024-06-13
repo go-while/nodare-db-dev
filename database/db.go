@@ -2,7 +2,7 @@ package database
 
 import (
 	//"time"
-	"github.com/go-while/nodare-db/logger"
+	"github.com/go-while/nodare-db-dev/logger"
 )
 
 type XDatabase struct {
