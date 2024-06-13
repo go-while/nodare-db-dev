@@ -36,7 +36,7 @@ type XDICK struct {
 	//SubDICKs [DEFAULT_SUBDICKS]*SubDICK
 	SubDICKs []*SubDICK
 	SubCount uint32
-	logger   ilog.ILOG
+	logs   ilog.ILOG
 }
 
 type SubDICK struct {
@@ -44,19 +44,19 @@ type SubDICK struct {
 	submux     sync.RWMutex
 	hashTables [2]*DickTable
 	rehashidx  int
-	logger     ilog.ILOG
+	logs     ilog.ILOG
 }
 
 // NewXDICK returns a new instance of XDICK.
 //
 // The function does not take any parameters.
 // It returns a pointer to XDICK.
-func NewXDICK(logger ilog.ILOG, sdCh chan uint32, returnsubDICKs chan []*SubDICK) *XDICK {
+func NewXDICK(logs ilog.ILOG, sdCh chan uint32, returnsubDICKs chan []*SubDICK) *XDICK {
 	var mainmux sync.RWMutex
 	//getSubDICKs := make(chan *SubDICK) // unbuffered
 
 	go func(sdCh chan uint32, returnsubDICKs chan []*SubDICK) {
-		logger.Info("NewXDICK: creating SubDICKs waits async for configs to load!")
+		logs.Debug("NewXDICK: creating SubDICKs waits async for configs to load!")
 		sub_dicks := <-sdCh // after NewFactory waits for sub_dicks
 		sdCh <- sub_dicks   // re-push in so NewDICK() can set SubCount
 		created := 0
@@ -66,7 +66,7 @@ func NewXDICK(logger ilog.ILOG, sdCh chan uint32, returnsubDICKs chan []*SubDICK
 				parent:     &mainmux,
 				hashTables: [2]*DickTable{NewDickTable(0), NewDickTable(0)},
 				rehashidx:  -1,
-				logger:     logger,
+				logs:     logs,
 			}
 			subDICKs = append(subDICKs, subDICK)
 			created++
@@ -74,14 +74,14 @@ func NewXDICK(logger ilog.ILOG, sdCh chan uint32, returnsubDICKs chan []*SubDICK
 
 		returnsubDICKs <- subDICKs
 		close(returnsubDICKs)
-		logger.Debug("Created subDICKs %d/%d ", sub_dicks, created)
+		logs.Debug("Created subDICKs %d/%d ", sub_dicks, created)
 	}(sdCh, returnsubDICKs) // end go func
 
 	xdick := &XDICK{
 		//hashmode: HASHER,
 		mainmux:  mainmux,
 		SubDICKs: nil, // sets later
-		logger:   logger,
+		logs:   logs,
 	}
 	return xdick
 }
@@ -110,11 +110,11 @@ func (d *XDICK) expand(idx uint32, newSize int64) {
 	isrehashing := d.isRehashing(idx)
 	istablefull := d.mainDICK(idx).used > newSize
 	if isrehashing || istablefull {
-		d.logger.Info("SubDick [%d] expand return1 ! (newSize=%d isrehashing=%t istablefull=%t used=%d)", idx, newSize, isrehashing, istablefull, d.mainDICK(idx).used)
+		d.logs.Info("SubDick [%d] expand return1 ! (newSize=%d isrehashing=%t istablefull=%t used=%d)", idx, newSize, isrehashing, istablefull, d.mainDICK(idx).used)
 		return
 	}
 
-	d.logger.Info("SubDick [%d] expand newSize=%d isrehashing=%t istablefull=%t used=%d", idx, newSize, isrehashing, istablefull, d.mainDICK(idx).used)
+	d.logs.Info("SubDick [%d] expand newSize=%d isrehashing=%t istablefull=%t used=%d", idx, newSize, isrehashing, istablefull, d.mainDICK(idx).used)
 
 	nextSize := nextPower(newSize)
 	if d.mainDICK(idx).used >= nextSize {
@@ -151,7 +151,7 @@ func (d *XDICK) expandIfNeeded(idx uint32) {
 
 func (d *XDICK) split(key [16]byte) (uint64, uint64) {
 	if len(key) == 0 || len(key) < 16 {
-		d.logger.Error("ERROR split len(key)=%d", len(key))
+		d.logs.Error("ERROR split len(key)=%d", len(key))
 		return 0, 0
 	}
 	key0 := binary.LittleEndian.Uint64(key[:8])
@@ -176,7 +176,7 @@ func (d *XDICK) hasher(any string) uint64 {
 		hash.Write([]byte(any))
 		return hash.Sum64()
 	}
-	d.logger.Fatal("No HASHER defined! HASHER=%d %x", HASHER, HASHER)
+	d.logs.Fatal("No HASHER defined! HASHER=%d %x", HASHER, HASHER)
 	os.Exit(1)
 	return 0
 } // end func hasher
@@ -185,7 +185,7 @@ func (d *XDICK) hasher(any string) uint64 {
 //
 // It returns an integer representing the index of the key in the dictionary.
 func (d *XDICK) keyIndex(idx uint32, key string) int {
-	d.logger.Debug("keyIndex(key=len(%d)='%s'", len(key), key)
+	d.logs.Debug("keyIndex(key=len(%d)='%s'", len(key), key)
 	d.expandIfNeeded(idx)
 	hash := d.hasher(key) // TODO!FIXME: hash earlier?
 
@@ -200,7 +200,7 @@ func (d *XDICK) keyIndex(idx uint32, key string) int {
 		for entry := hashTable.table[index]; entry != nil; entry = entry.next {
 			loops2++
 			if entry.key == key {
-				d.logger.Info("keyIndex [%d] entry.key==key='%s' loops1=%d loops2=%d return -1", idx, key, loops1, loops2)
+				d.logs.Info("keyIndex [%d] entry.key==key='%s' loops1=%d loops2=%d return -1", idx, key, loops1, loops2)
 				return -1
 			}
 		}
@@ -209,7 +209,7 @@ func (d *XDICK) keyIndex(idx uint32, key string) int {
 			break
 		}
 	}
-	d.logger.Info("keyIndex [%d] key='%s' loops1=%d loops2=%d return index=%d", idx, key, loops1, loops2, index)
+	d.logs.Info("keyIndex [%d] key='%s' loops1=%d loops2=%d return index=%d", idx, key, loops1, loops2, index)
 	return index
 } // end func keyIndex
 
@@ -223,7 +223,7 @@ func (d *XDICK) keyIndex(idx uint32, key string) int {
 // - error: An error if the key already exists in the SubDICK.
 func (d *XDICK) add(idx uint32, key string, value interface{}) error {
 	X := d.keyIndex(idx, key)
-	d.logger.Debug("add(key=%d='%s' value='%#v' X=%d", len(key), key, value, X)
+	d.logs.Debug("add(key=%d='%s' value='%#v' X=%d", len(key), key, value, X)
 
 	if X == -1 {
 		return fmt.Errorf(`unexpectedly found an entry with the same key when trying to add #{ %s } / #{ %s }`, key, value)
@@ -272,7 +272,7 @@ func (d *XDICK) rehash(idx uint32, n int) {
 	if !d.isRehashing(idx) {
 		return
 	}
-	d.logger.Info("SubDick [%d] rehash used=%d", idx, d.mainDICK(idx).used)
+	d.logs.Info("SubDick [%d] rehash used=%d", idx, d.mainDICK(idx).used)
 	for n > 0 && d.mainDICK(idx).used != 0 {
 		n--
 
@@ -408,7 +408,7 @@ func (d *XDICK) watchDog(idx uint32) {
 			continue
 		}
 
-		if !d.SubDICKs[idx].logger.IfDebug() {
+		if !d.SubDICKs[idx].logs.IfDebug() {
 			time.Sleep(59 * time.Second)
 			continue
 		}
@@ -425,9 +425,9 @@ func (d *XDICK) watchDog(idx uint32) {
 		}
 		ht0cap := len(d.SubDICKs[idx].hashTables[0].table)
 		ht1cap := len(d.SubDICKs[idx].hashTables[1].table)
-		d.logger.Info("watchDog [%d] ht0=%d/%d ht1=%d/%d", idx, ht0, ht0cap, ht1, ht1cap)
+		d.logs.Info("watchDog [%d] ht0=%d/%d ht1=%d/%d", idx, ht0, ht0cap, ht1, ht1cap)
 		d.SubDICKs[idx].submux.RUnlock()
-		//d.logger.Debug("watchDog [%d] SubDICKs='\n   ---> %#v", idx, d.SubDICKs[idx])
+		//d.logs.Debug("watchDog [%d] SubDICKs='\n   ---> %#v", idx, d.SubDICKs[idx])
 	}
 } // end func watchDog
 

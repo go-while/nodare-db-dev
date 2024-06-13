@@ -5,12 +5,15 @@ import (
 	"github.com/go-while/nodare-db-dev/database"
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/server"
+	"flag"
 	"log"
 )
 
 const MODE = 1
 
 var (
+	flag_config string
+
 	Prof *prof.Profiler
 	// setHASHER sets prefered hash algo
 	// [ HASH_siphash | HASH_FNV32A | HASH_FNV64A ]
@@ -21,6 +24,9 @@ var (
 func main() {
 	Prof = prof.NewProf()
 	server.Prof = Prof
+
+	// capture the flags
+	flag.StringVar(&flag_config, "conf", "config.toml", "path to config.toml")
 
 	database.HASHER = setHASHER
 	logs := ilog.NewLogger(ilog.GetEnvLOGLEVEL())
@@ -34,13 +40,13 @@ func main() {
 			db.XDICK.GenerateSALT()
 		}
 		ndbServer := server.NewXNDBServer(db, logs)
-		srv, vcfg, sub_dicks := server.NewFactory().GetWebServer(ndbServer, logs)
+		srv, vcfg, sub_dicks := server.NewFactory().NewNDBServer(flag_config, ndbServer, logs)
 		logs.Debug("Mode 1: Loaded vcfg='%#v'", vcfg)
 		sdCh <- sub_dicks // read sub_dicks from config, pass to sdCh so we can create subDICKs
 		logs.Debug("Mode 1: Created DB sub_dicks=%d", sub_dicks)
 		<-waitCh
 		logs.Debug("Mode 1: Booted sub_dicks=%d srv='%v'", sub_dicks, srv)
-		//host := vcfg.GetString("server.host")
+		//host := vcfg.GetString(VK_SERVER_HOST)
 		//log.Printf("MAIN Debug host='%v'", host)
 		//log.Printf("MAIN Debug srv='%#v'", srv)
 		if logs.IfDebug() {

@@ -18,13 +18,13 @@ type WebMux interface {
 
 type XNDBServer struct {
 	db     *database.XDatabase
-	logger ilog.ILOG
+	logs ilog.ILOG
 }
 
-func NewXNDBServer(db *database.XDatabase, logger ilog.ILOG) *XNDBServer {
+func NewXNDBServer(db *database.XDatabase, logs ilog.ILOG) *XNDBServer {
 	return &XNDBServer{
 		db:     db,
-		logger: logger,
+		logs: logs,
 	}
 }
 
@@ -98,7 +98,7 @@ func (srv *XNDBServer) HandlerSet(w http.ResponseWriter, r *http.Request) {
 	for key, value := range data {
 		err = srv.db.Set(key, value)
 		if err != nil {
-			srv.logger.Warn("HandlerSet err='%v'", err)
+			srv.logs.Warn("HandlerSet err='%v'", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -139,6 +139,6 @@ func (srv *XNDBServer) SetLogLvl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// TODO test
-	srv.logger.SetLOGLEVEL(ilog.GetLOGLEVEL(key))
+	srv.logs.SetLOGLEVEL(ilog.GetLOGLEVEL(key))
 	return
 }

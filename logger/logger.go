@@ -91,7 +91,7 @@ func (l *LOG) SetLOGLEVEL(lvl int) {
 	log.Printf("SetLOGLEVEL = %d", lvl)
 }
 
-// SetOutput sets the output writer for the logger.
+// SetOutput sets the output writer for the logs.
 func (l *LOG) SetOutput(writer io.Writer) {
 	log.SetOutput(writer)
 }
@@ -120,7 +120,7 @@ func (l *LOG) LogClose() {
 	}
 }
 
-// ConfigureFileAndConsoleOutput configures the logger to write to both a file and console.
+// ConfigureFileAndConsoleOutput configures the logs to write to both a file and console.
 func (l *LOG) ConfigureFileAndConsoleOutput() {
 	if l.LogFile == nil {
 		log.SetOutput(os.Stdout)

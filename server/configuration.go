@@ -13,21 +13,19 @@ import (
 	"strings"
 )
 
-var AVAIL_SUBDICKS = []uint32{10, 100, 1000, 10000, 100000, 1000000}
-
 type VConfig interface {
 	Get(key string) interface{}
 	GetString(key string) string
 	GetInt(key string) int
 	GetUint32(key string) uint32
+	GetUint64(key string) uint64
 	GetBool(key string) bool
 	IsSet(key string) bool
 }
 
 type ViperConfig struct {
-	//*viper.Viper
 	viper            *viper.Viper
-	logger           ilog.ILOG
+	logs           ilog.ILOG
 	mapsEnvsToConfig map[string]string
 }
 
@@ -42,47 +40,48 @@ func (c *ViperConfig) createDirectory(dirPath string) {
 	err := os.MkdirAll(dirPath, 0755)
 	switch {
 	case err == nil:
-		c.logger.Info("Directory created successfully: %s", dirPath)
+		c.logs.Info("Directory created successfully: %s", dirPath)
 	case os.IsExist(err):
-		c.logger.Info("Directory already exists: %s", dirPath)
+		c.logs.Info("Directory already exists: %s", dirPath)
 	default:
-		c.logger.Info("Error creating directory: %v", err)
+		c.logs.Info("Error creating directory: %v", err)
 	}
 }
 
 func (c *ViperConfig) createDefaultConfigFile(cfgFile string) {
 
-	log.Printf("Creating default config file")
-	suadminuser := DEFAULT_ADMIN
+	log.Printf("Creating default config")
+
+	suadminuser := DEFAULT_SUPERADMIN
 	suadminpass := utils.GenerateRandomString(DEFAULT_PW_LEN)
 
-	c.viper.SetDefault("server.superadmin_user", suadminuser)
-	c.viper.SetDefault("server.superadmin_pass", suadminpass)
+	c.viper.SetDefault(VK_ACCESS_SUPERADMIN_USER, suadminuser)
+	c.viper.SetDefault(VK_ACCESS_SUPERADMIN_PASS, suadminpass)
 
-	c.viper.SetDefault("log.log_level", DEFAULT_LOGLEVEL_STR)
-	c.viper.SetDefault("log.log_file", DEFAULT_LOGS_FILE)
+	c.viper.SetDefault(VK_LOG_LOGLEVEL, DEFAULT_LOGLEVEL_STR)
+	c.viper.SetDefault(VK_LOG_LOGFILE, DEFAULT_LOGS_FILE)
 
-	c.viper.SetDefault("settings.base_dir", ".")
-	c.viper.SetDefault("settings.data_dir", DATA_DIR)
-	c.viper.SetDefault("settings.settings_dir", CONFIG_DIR)
-	c.viper.SetDefault("settings.sub_dicks", "1000")
+	c.viper.SetDefault(VK_SETTINGS_BASE_DIR, DOT)
+	c.viper.SetDefault(VK_SETTINGS_DATA_DIR, DATA_DIR)
+	c.viper.SetDefault(VK_SETTINGS_SETTINGS_DIR, CONFIG_DIR)
+	c.viper.SetDefault(VK_SETTINGS_SUB_DICKS, V_DEFAULT_SUB_DICKS)
 
-	c.viper.SetDefault("security.tls_enabled", false)
+	c.viper.SetDefault(VK_SEC_TLS_ENABLED, V_DEFAULT_TLS_ENABLED)
 	// /etc/letsencrypt/live/(sub.)domain.com/fullchain.pem
-	c.viper.SetDefault("security.tls_cert_private", filepath.Join(CONFIG_DIR, DEFAULT_TLS_PUBCERT))
+	c.viper.SetDefault(VK_SEC_TLS_PRIVKEY, filepath.Join(CONFIG_DIR, DEFAULT_TLS_PUBCERT))
 	// /etc/letsencrypt/live/(sub.)domain.com/privkey.pem
-	c.viper.SetDefault("security.tls_cert_public", filepath.Join(CONFIG_DIR, DEFAULT_TLS_PRIVKEY))
+	c.viper.SetDefault(VK_SEC_TLS_PUBCERT, filepath.Join(CONFIG_DIR, DEFAULT_TLS_PRIVKEY))
 
-	c.viper.SetDefault("network.websrv_read_timeout", 5)
-	c.viper.SetDefault("network.websrv_write_timeout", 10)
-	c.viper.SetDefault("network.websrv_idle_timeout", 120)
+	c.viper.SetDefault(VK_NET_WEBSRV_READ_TIMEOUT, V_DEFAULT_NET_WEBSRV_READ_TIMEOUT)
+	c.viper.SetDefault(VK_NET_WEBSRV_WRITE_TIMEOUT, V_DEFAULT_NET_WEBSRV_WRITE_TIMEOUT)
+	c.viper.SetDefault(VK_NET_WEBSRV_IDLE_TIMEOUT, V_DEFAULT_NET_WEBSRV_IDLE_TIMEOUT)
 
-	c.viper.SetDefault("server.host", DEFAULT_SERVER_ADDR)
-	c.viper.SetDefault("server.port", DEFAULT_SERVER_TCP_PORT)
-	c.viper.SetDefault("server.port_udp", DEFAULT_SERVER_UDP_PORT)
-	c.viper.SetDefault("server.socket_path", DEFAULT_SERVER_SOCKET_PATH)
-	c.viper.SetDefault("server.socket_tcpport", DEFAULT_SERVER_SOCKET_TCP_PORT)
-	c.viper.SetDefault("server.socket_tlsport", DEFAULT_SERVER_SOCKET_TLS_PORT)
+	c.viper.SetDefault(VK_SERVER_HOST, DEFAULT_SERVER_ADDR)
+	c.viper.SetDefault(VK_SERVER_PORT_TCP, DEFAULT_SERVER_TCP_PORT)
+	c.viper.SetDefault(VK_SERVER_PORT_UDP, DEFAULT_SERVER_UDP_PORT)
+	c.viper.SetDefault(VK_SERVER_SOCKET_PATH, DEFAULT_SERVER_SOCKET_PATH)
+	c.viper.SetDefault(VK_SERVER_SOCKET_PORT_TCP, DEFAULT_SERVER_SOCKET_TCP_PORT)
+	c.viper.SetDefault(VK_SERVER_SOCKET_PORT_TLS, DEFAULT_SERVER_SOCKET_TLS_PORT)
 
 	c.viper.WriteConfigAs(cfgFile)
 
@@ -91,43 +90,43 @@ func (c *ViperConfig) createDefaultConfigFile(cfgFile string) {
 
 func (c *ViperConfig) mapEnvsToConf() {
 
-	c.mapsEnvsToConfig["server.superadmin_user"] = "NDB_SUPERADMIN"
-	c.mapsEnvsToConfig["server.superadmin_pass"] = "NDB_SADMINPASS"
+	c.mapsEnvsToConfig[VK_ACCESS_SUPERADMIN_USER] = "NDB_SUPERADMIN"
+	c.mapsEnvsToConfig[VK_ACCESS_SUPERADMIN_PASS] = "NDB_SADMINPASS"
 
-	c.mapsEnvsToConfig["log.log_level"] = "LOGLEVEL"
-	c.mapsEnvsToConfig["log.log_file"] = "LOGS_FILE"
+	c.mapsEnvsToConfig[VK_LOG_LOGLEVEL] = "LOGLEVEL"
+	c.mapsEnvsToConfig[VK_LOG_LOGFILE] = "LOGS_FILE"
 
-	c.mapsEnvsToConfig["settings.base_dir"] = "NDB_BASE_DIR"
-	c.mapsEnvsToConfig["settings.data_dir"] = "NDB_DATA_DIR"
-	c.mapsEnvsToConfig["settings.settings_dir"] = "NDB_CONFIG_DIR"
-	c.mapsEnvsToConfig["settings.sub_dicks"] = "NDB_SUB_DICKS"
+	c.mapsEnvsToConfig[VK_SETTINGS_BASE_DIR] = "NDB_BASE_DIR"
+	c.mapsEnvsToConfig[VK_SETTINGS_DATA_DIR] = "NDB_DATA_DIR"
+	c.mapsEnvsToConfig[VK_SETTINGS_SETTINGS_DIR] = "NDB_CONFIG_DIR"
+	c.mapsEnvsToConfig[VK_SETTINGS_SUB_DICKS] = "NDB_SUB_DICKS"
 
-	c.mapsEnvsToConfig["security.tls_enabled"] = "NDB_TLS_ENABLED"
-	c.mapsEnvsToConfig["security.tls_cert_private"] = "NDB_TLS_KEY"
-	c.mapsEnvsToConfig["security.tls_cert_public"] = "NDB_TLS_CRT"
+	c.mapsEnvsToConfig[VK_SEC_TLS_ENABLED] = "NDB_TLS_ENABLED"
+	c.mapsEnvsToConfig[VK_SEC_TLS_PRIVKEY] = "NDB_TLS_KEY"
+	c.mapsEnvsToConfig[VK_SEC_TLS_PUBCERT] = "NDB_TLS_CRT"
 
-	c.mapsEnvsToConfig["network.websrv_read_timeout"] = "NDB_WEBSRV_READ_TIMEOUT"
-	c.mapsEnvsToConfig["network.websrv_write_timeout"] = "NDB_WEBSRV_WRITE_TIMEOUT"
-	c.mapsEnvsToConfig["network.websrv_idle_timeout"] = "NDB_WEBSRV_IDLE_TIMEOUT"
+	c.mapsEnvsToConfig[VK_NET_WEBSRV_READ_TIMEOUT] = "NDB_WEBSRV_READ_TIMEOUT"
+	c.mapsEnvsToConfig[VK_NET_WEBSRV_WRITE_TIMEOUT] = "NDB_WEBSRV_WRITE_TIMEOUT"
+	c.mapsEnvsToConfig[VK_NET_WEBSRV_IDLE_TIMEOUT] = "NDB_WEBSRV_IDLE_TIMEOUT"
 
-	c.mapsEnvsToConfig["server.host"] = "NDB_HOST"
-	c.mapsEnvsToConfig["server.port"] = "NDB_PORT"
-	c.mapsEnvsToConfig["server.port_udp"] = "DEFAULT_SERVER_UDP_PORT"
-	c.mapsEnvsToConfig["server.socket_path"] = "DEFAULT_SERVER_SOCKET_PATH"
-	c.mapsEnvsToConfig["server.socket_tcpport"] = "DEFAULT_SERVER_SOCKET_TCP_PORT"
-	c.mapsEnvsToConfig["server.socket_tlsport"] = "DEFAULT_SERVER_SOCKET_TLS_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_HOST] = "NDB_HOST"
+	c.mapsEnvsToConfig[VK_SERVER_PORT_TCP] = "NDB_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_PORT_UDP] = "DEFAULT_SERVER_UDP_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PATH] = "DEFAULT_SERVER_SOCKET_PATH"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TCP] = "DEFAULT_SERVER_SOCKET_TCP_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TLS] = "DEFAULT_SERVER_SOCKET_TLS_PORT"
 
 }
 
 func (c *ViperConfig) ReadConfigsFromEnvs() {
-	log.Printf("READ ENV VARS")
+	c.logs.Debug("READ ENV VARS")
 	for key, value := range c.mapsEnvsToConfig {
 		valueFromEnv, ok := os.LookupEnv(value)
 		if ok {
-			log.Printf("GOT NEW ENV key='%s' v='%v' valueFromEnv='%s", key, value, valueFromEnv)
+			c.logs.Info("NEW ENV VK='%s' envK='%v' valueFromEnv='%s", key, value, valueFromEnv)
 			c.viper.Set(key, valueFromEnv)
 		} else {
-			log.Printf("NO ENV: key='%s' val='%s' !ok", key, valueFromEnv)
+			c.logs.Debug("NO ENV VK='%s' valueFromEnv='%s' !ok", key, valueFromEnv)
 		}
 	}
 }
@@ -141,9 +140,9 @@ func (c *ViperConfig) initDB() (sub_dicks uint32) {
 	os.Setenv("NDB_BASE_DIR", dbBaseDir)
 
 	c.createDirectory(filepath.Join(dbBaseDir, CONFIG_DIR))
-	c.createDirectory(filepath.Join(dbBaseDir, c.viper.GetString("settings.data_dir")))
+	c.createDirectory(filepath.Join(dbBaseDir, c.viper.GetString(VK_SETTINGS_DATA_DIR)))
 
-	setSUBDICKS := c.viper.GetUint32("settings.sub_dicks")
+	setSUBDICKS := c.viper.GetUint32(VK_SETTINGS_SUB_DICKS)
 	for _, v := range AVAIL_SUBDICKS {
 		if setSUBDICKS == v {
 			sub_dicks = setSUBDICKS
@@ -163,18 +162,14 @@ func (c *ViperConfig) PrintConfigsToConsole() {
 	}
 }
 
-func NewConfiguration(cfgFile string, logger ilog.ILOG) (VConfig, uint32) {
-
-	//v := viper.New()
-	//v.mapEnvsToConf()
-	//v.SetConfigType("toml")
+func NewViperConf(cfgFile string, logs ilog.ILOG) (VConfig, uint32) {
 
 	if len(strings.TrimSpace(cfgFile)) == 0 {
 		log.Printf("No config file in '%s' was supplied. Using default value: %s", cfgFile, DEFAULT_CONFIG_FILE)
 		cfgFile = DEFAULT_CONFIG_FILE
 	}
 
-	c := &ViperConfig{viper: viper.New(), logger: logger, mapsEnvsToConfig: make(map[string]string, 32)}
+	c := &ViperConfig{viper: viper.New(), logs: logs, mapsEnvsToConfig: make(map[string]string, 32)}
 	c.viper.SetConfigType("toml")
 	c.mapEnvsToConf()
 
@@ -183,7 +178,7 @@ func NewConfiguration(cfgFile string, logger ilog.ILOG) (VConfig, uint32) {
 		c.createDefaultConfigFile(cfgFile)
 	}
 
-	log.Printf("Using config file: %s", cfgFile)
+	c.logs.Info("Using config file: %s", cfgFile)
 
 	c.viper.SetConfigFile(cfgFile)
 
@@ -200,22 +195,4 @@ func NewConfiguration(cfgFile string, logger ilog.ILOG) (VConfig, uint32) {
 	sub_dicks := c.initDB()
 	c.PrintConfigsToConsole()
 	return c.viper, sub_dicks
-}
-
-/*
-func (c *ViperConfig) Get(key string) interface{} {
-	return c.viper.Get(key)
-}
-
-func (c *ViperConfig) GetString(key string) string {
-	return c.viper.GetString(key)
-}
-
-func (c *ViperConfig) GetBool(key string) bool {
-	return c.viper.GetBool(key)
-}
-
-func (c *ViperConfig) IsSet(key string) bool {
-	return c.viper.IsSet(key)
-}
-*/
+} // end func NewViperConf

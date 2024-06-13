@@ -23,7 +23,7 @@ type HttpServer struct {
 	httpServer *http.Server
 	VCFG       VConfig
 	sigChan    chan os.Signal
-	logger     ilog.ILOG
+	logs       ilog.ILOG
 }
 
 type HttpsServer struct {
@@ -31,27 +31,27 @@ type HttpsServer struct {
 	httpsServer *http.Server
 	VCFG        VConfig
 	sigChan     chan os.Signal
-	logger      ilog.ILOG
+	logs        ilog.ILOG
 }
 
-func NewHttpServer(ndbServer WebMux, logger ilog.ILOG) (srv *HttpServer, cfg VConfig, sub_dicks uint32) {
-	cfg, sub_dicks = NewConfiguration("", logger)
+func NewHttpServer(conf string, ndbServer WebMux, logs ilog.ILOG) (srv *HttpServer, cfg VConfig, sub_dicks uint32) {
+	cfg, sub_dicks = NewViperConf(conf, logs)
 	//log.Printf("NewHttpServer cfg='%#v' ViperConfig='%#v'", cfg, cfg.ViperConfig.)
 	srv = &HttpServer{
 		sigChan:   make(chan os.Signal, 1),
 		ndbServer: ndbServer,
-		logger:    logger,
+		logs:    logs,
 		VCFG:      cfg,
 	}
 	return
 }
 
-func NewHttpsServer(ndbServer WebMux, logger ilog.ILOG) (srv *HttpsServer, cfg VConfig, sub_dicks uint32) {
-	cfg, sub_dicks = NewConfiguration("", logger)
+func NewHttpsServer(conf string, ndbServer WebMux, logs ilog.ILOG) (srv *HttpsServer, cfg VConfig, sub_dicks uint32) {
+	cfg, sub_dicks = NewViperConf(conf, logs)
 	srv = &HttpsServer{
 		sigChan:   make(chan os.Signal, 1),
 		ndbServer: ndbServer,
-		logger:    logger,
+		logs:    logs,
 		VCFG:      cfg,
 	}
 	return
@@ -59,25 +59,25 @@ func NewHttpsServer(ndbServer WebMux, logger ilog.ILOG) (srv *HttpsServer, cfg V
 
 func (server *HttpServer) Start() {
 
-	if server.VCFG.IsSet("log.log_file") {
-		server.logger.LogStart(server.VCFG.GetString("log.log_file"))
+	if server.VCFG.IsSet(VK_LOG_LOGFILE) {
+		server.logs.LogStart(server.VCFG.GetString(VK_LOG_LOGFILE))
 	}
 
 	server.httpServer = &http.Server{
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
-		Addr:         fmt.Sprintf("%s:%s", server.VCFG.GetString("server.host"), server.VCFG.GetString("server.port")),
+		Addr:         fmt.Sprintf("%s:%s", server.VCFG.GetString(VK_SERVER_HOST), server.VCFG.GetString(VK_SERVER_PORT_TCP)),
 		Handler:      server.ndbServer.CreateMux(),
 	}
 
 	go func() {
-		server.logger.Info("HttpServer @ '%s:%s'", server.VCFG.GetString("server.host"), server.VCFG.GetString("server.port"))
+		server.logs.Info("HttpServer @ '%s:%s'", server.VCFG.GetString(VK_SERVER_HOST), server.VCFG.GetString(VK_SERVER_PORT_TCP))
 		if err := server.httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			server.logger.Fatal("HTTP server error: %v", err)
+			server.logs.Fatal("HTTP server error: %v", err)
 		}
-		server.logger.Info("HttpServer: closing")
-		server.logger.LogClose()
+		server.logs.Info("HttpServer: closing")
+		server.logs.LogClose()
 	}()
 
 	signal.Notify(server.sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -89,13 +89,13 @@ func (server *HttpServer) Stop() {
 	defer shutdownRelease()
 
 	if err := server.httpServer.Shutdown(shutdownCtx); err != nil {
-		server.logger.Fatal("HttpServer: shutdown error %v", err)
+		server.logs.Fatal("HttpServer: shutdown error %v", err)
 	}
 
-	server.logger.Info("HttpServer shutdown complete")
+	server.logs.Info("HttpServer shutdown complete")
 	server.httpServer = nil
 
-	server.logger.LogClose()
+	server.logs.LogClose()
 }
 
 func (server *HttpsServer) Start() {
@@ -103,19 +103,19 @@ func (server *HttpsServer) Start() {
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
-		Addr:         fmt.Sprintf("%s:%s", server.VCFG.GetString("server.host"), server.VCFG.GetString("server.port")),
+		Addr:         fmt.Sprintf("%s:%s", server.VCFG.GetString(VK_SERVER_HOST), server.VCFG.GetString(VK_SERVER_PORT_TCP)),
 		Handler:      server.ndbServer.CreateMux(),
 	}
 
 	go func() {
-		server.logger.Info("HttpsServer @ '%s:%s'", server.VCFG.GetString("server.host"), server.VCFG.GetString("server.port"))
-		server.logger.Debug("HttpsServer: PUB_CERT='%s' PRIV_KEY='%s'", server.VCFG.GetString("security.tls_cert_public"), server.VCFG.GetString("security.tls_cert_private"))
+		server.logs.Info("HttpsServer @ '%s:%s'", server.VCFG.GetString(VK_SERVER_HOST), server.VCFG.GetString(VK_SERVER_PORT_TCP))
+		server.logs.Debug("HttpsServer: PUB_CERT='%s' PRIV_KEY='%s'", server.VCFG.GetString(VK_SEC_TLS_PUBCERT), server.VCFG.GetString(VK_SEC_TLS_PRIVKEY))
 
-		if err := server.httpsServer.ListenAndServeTLS(server.VCFG.GetString("security.tls_cert_public"), server.VCFG.GetString("security.tls_cert_private")); !errors.Is(err, http.ErrServerClosed) {
-			server.logger.Fatal("HttpsServer: error %v", err)
+		if err := server.httpsServer.ListenAndServeTLS(server.VCFG.GetString(VK_SEC_TLS_PUBCERT), server.VCFG.GetString(VK_SEC_TLS_PRIVKEY)); !errors.Is(err, http.ErrServerClosed) {
+			server.logs.Fatal("HttpsServer: error %v", err)
 		}
-		server.logger.Debug("HttpsServer: closing")
-		server.logger.LogClose()
+		server.logs.Debug("HttpsServer: closing")
+		server.logs.LogClose()
 	}()
 
 	signal.Notify(server.sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -127,10 +127,10 @@ func (server *HttpsServer) Stop() {
 	defer shutdownRelease()
 
 	if err := server.httpsServer.Shutdown(shutdownCtx); err != nil {
-		server.logger.Fatal("HttpsServer: shutdown error %v", err)
+		server.logs.Fatal("HttpsServer: shutdown error %v", err)
 	}
 
-	server.logger.Info("HttpsServer: shutdown complete")
+	server.logs.Info("HttpsServer: shutdown complete")
 	server.httpsServer = nil
-	server.logger.LogClose()
+	server.logs.LogClose()
 }

@@ -30,15 +30,15 @@ var (
 func NewSocketHandler(vcfg VConfig) *SOCKET {
 	sockets := &SOCKET{}
 	log.Printf("NewSocketHandler vcfg='%#v'", vcfg)
-	host := vcfg.GetString("server.host")
-	tcpport := vcfg.GetString("server.socket_tcpport")
-	tlsport := vcfg.GetString("server.socket_tlsport")
-	socketPath := vcfg.GetString("server.socket_path")
+	host := vcfg.GetString(VK_SERVER_HOST)
+	tcpport := vcfg.GetString(VK_SERVER_SOCKET_PORT_TCP)
+	tlsport := vcfg.GetString(VK_SERVER_SOCKET_PORT_TLS)
+	socketPath := vcfg.GetString(VK_SERVER_SOCKET_PATH)
 	tcpListen := host + ":" + tcpport
 	tlsListen := host + ":" + tlsport
-	tlscrt := vcfg.GetString("security.tls_cert_public")
-	tlskey := vcfg.GetString("security.tls_cert_private")
-	tlsenabled := vcfg.GetBool("security.tls_enabled")
+	tlscrt := vcfg.GetString(VK_SEC_TLS_PUBCERT)
+	tlskey := vcfg.GetString(VK_SEC_TLS_PRIVKEY)
+	tlsenabled := vcfg.GetBool(VK_SEC_TLS_ENABLED)
 	sockets.Start(tcpListen, tlsListen, socketPath, tlscrt, tlskey, tlsenabled)
 	return sockets
 }
