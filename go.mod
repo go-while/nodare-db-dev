@@ -1,4 +1,4 @@
-module github.com/go-while/nodare-db
+module github.com/go-while/nodare-db-dev
 
 go 1.22.4
 
