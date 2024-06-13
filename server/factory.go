@@ -16,7 +16,7 @@ func NewFactory() *Factory {
 	return &Factory{}
 }
 
-func (f *Factory) GetWebServer(ndbServer WebMux, logger *ilog.LOG) (srv Server, vcfg VConfig, sub_dicks uint32) {
+func (f *Factory) GetWebServer(ndbServer WebMux, logger ilog.ILOG) (srv Server, vcfg VConfig, sub_dicks uint32) {
 	f.mux.Lock()
 	defer f.mux.Unlock()
 	if f.getTLSEnabled() {
@@ -30,7 +30,7 @@ func (f *Factory) GetWebServer(ndbServer WebMux, logger *ilog.LOG) (srv Server, 
 	lvlstr := vcfg.GetString("log.log_level")
 	lvlint := ilog.GetLOGLEVEL(lvlstr)
 	logger.SetLOGLEVEL(lvlint)
-	log.Printf("Factory TCP srv='%#v' vcfg='%#v' sub_dicks=%d lvlstr='%s'=%d loglvl=%d", srv, vcfg, sub_dicks, lvlstr, lvlint, logger.LVL)
+	log.Printf("Factory TCP srv='%#v' vcfg='%#v' sub_dicks=%d lvlstr='%s'=%d loglvl=%d", srv, vcfg, sub_dicks, lvlstr, lvlint, logger.GetLOGLEVEL())
 	return
 }
 

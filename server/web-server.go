@@ -16,44 +16,43 @@ import (
 type Server interface {
 	Start()
 	Stop()
-	//Config()
 }
 
 type HttpServer struct {
-	ndbServer     WebMux
-	httpServer    *http.Server
-	VCFG           VConfig
-	sigChan       chan os.Signal
-	logger        *ilog.LOG
+	ndbServer  WebMux
+	httpServer *http.Server
+	VCFG       VConfig
+	sigChan    chan os.Signal
+	logger     ilog.ILOG
 }
 
 type HttpsServer struct {
-	ndbServer     WebMux
-	httpsServer   *http.Server
-	VCFG          VConfig
-	sigChan       chan os.Signal
-	logger        *ilog.LOG
+	ndbServer   WebMux
+	httpsServer *http.Server
+	VCFG        VConfig
+	sigChan     chan os.Signal
+	logger      ilog.ILOG
 }
 
-func NewHttpServer(ndbServer WebMux, logger *ilog.LOG) (srv *HttpServer, cfg VConfig, sub_dicks uint32) {
-	cfg, sub_dicks = NewConfiguration("")
+func NewHttpServer(ndbServer WebMux, logger ilog.ILOG) (srv *HttpServer, cfg VConfig, sub_dicks uint32) {
+	cfg, sub_dicks = NewConfiguration("", logger)
 	//log.Printf("NewHttpServer cfg='%#v' ViperConfig='%#v'", cfg, cfg.ViperConfig.)
 	srv = &HttpServer{
-		sigChan:       make(chan os.Signal, 1),
-		ndbServer:     ndbServer,
-		logger:        logger,
-		VCFG:          cfg,
+		sigChan:   make(chan os.Signal, 1),
+		ndbServer: ndbServer,
+		logger:    logger,
+		VCFG:      cfg,
 	}
 	return
 }
 
-func NewHttpsServer(ndbServer WebMux, logger *ilog.LOG) (srv *HttpsServer, cfg VConfig, sub_dicks uint32) {
-	cfg, sub_dicks = NewConfiguration("")
+func NewHttpsServer(ndbServer WebMux, logger ilog.ILOG) (srv *HttpsServer, cfg VConfig, sub_dicks uint32) {
+	cfg, sub_dicks = NewConfiguration("", logger)
 	srv = &HttpsServer{
-		sigChan:       make(chan os.Signal, 1),
-		ndbServer:     ndbServer,
-		logger:        logger,
-		VCFG:          cfg,
+		sigChan:   make(chan os.Signal, 1),
+		ndbServer: ndbServer,
+		logger:    logger,
+		VCFG:      cfg,
 	}
 	return
 }
@@ -61,7 +60,7 @@ func NewHttpsServer(ndbServer WebMux, logger *ilog.LOG) (srv *HttpsServer, cfg V
 func (server *HttpServer) Start() {
 
 	if server.VCFG.IsSet("log.log_file") {
-		server.logger.OpenLogFile(server.VCFG.GetString("log.log_file"))
+		server.logger.LogStart(server.VCFG.GetString("log.log_file"))
 	}
 
 	server.httpServer = &http.Server{
@@ -78,7 +77,7 @@ func (server *HttpServer) Start() {
 			server.logger.Fatal("HTTP server error: %v", err)
 		}
 		server.logger.Info("HttpServer: closing")
-		server.logger.CloseLogFile()
+		server.logger.LogClose()
 	}()
 
 	signal.Notify(server.sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -96,7 +95,7 @@ func (server *HttpServer) Stop() {
 	server.logger.Info("HttpServer shutdown complete")
 	server.httpServer = nil
 
-	server.logger.CloseLogFile()
+	server.logger.LogClose()
 }
 
 func (server *HttpsServer) Start() {
@@ -116,7 +115,7 @@ func (server *HttpsServer) Start() {
 			server.logger.Fatal("HttpsServer: error %v", err)
 		}
 		server.logger.Debug("HttpsServer: closing")
-		server.logger.CloseLogFile()
+		server.logger.LogClose()
 	}()
 
 	signal.Notify(server.sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -133,5 +132,5 @@ func (server *HttpsServer) Stop() {
 
 	server.logger.Info("HttpsServer: shutdown complete")
 	server.httpsServer = nil
-	server.logger.CloseLogFile()
+	server.logger.LogClose()
 }

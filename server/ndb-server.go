@@ -18,10 +18,10 @@ type WebMux interface {
 
 type XNDBServer struct {
 	db     *database.XDatabase
-	logger *ilog.LOG
+	logger ilog.ILOG
 }
 
-func NewXNDBServer(db *database.XDatabase, logger *ilog.LOG) *XNDBServer {
+func NewXNDBServer(db *database.XDatabase, logger ilog.ILOG) *XNDBServer {
 	return &XNDBServer{
 		db:     db,
 		logger: logger,

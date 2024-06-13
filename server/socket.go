@@ -19,7 +19,7 @@ type SOCKET struct {
 	cpu     sync.Mutex
 	mem     sync.Mutex
 	CPUfile *os.File
-	logs    *ilog.LOG
+	logs    ilog.ILOG
 }
 
 var (
@@ -105,18 +105,18 @@ func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tl
 		ACL.SetupACL()
 		certs, err := tls.LoadX509KeyPair(tlscrt, tlskey)
 		if err != nil {
-				log.Printf("ERROR tls.LoadX509KeyPair err='%v'", err)
-				os.Exit(1)
+			log.Printf("ERROR tls.LoadX509KeyPair err='%v'", err)
+			os.Exit(1)
 		}
 		ssl_conf := &tls.Config{
-						Certificates: []tls.Certificate{certs},
-						//MinVersion: tls.VersionTLS12,
-						//MaxVersion: tls.VersionTLS13,
+			Certificates: []tls.Certificate{certs},
+			//MinVersion: tls.VersionTLS12,
+			//MaxVersion: tls.VersionTLS13,
 		}
 		listener_ssl, err := tls.Listen("tcp", tlsListen, ssl_conf)
 		if err != nil {
-				log.Printf("ERROR SOCKET tls.Listen err='%v'", err)
-				return
+			log.Printf("ERROR SOCKET tls.Listen err='%v'", err)
+			return
 		}
 		defer listener_ssl.Close()
 		log.Printf("SOCKET tls.Listen: %s", tlsListen)
@@ -225,53 +225,53 @@ readlines:
 			// and send reply to client
 
 			switch state {
-				case 0: // state 0 reads key
-					if len(line) > KEY_LIMIT {
-						tp.PrintfLine(CAN)
-						break readlines
-					}
-					k = line
-					state++ // state is 1 now
+			case 0: // state 0 reads key
+				if len(line) > KEY_LIMIT {
+					tp.PrintfLine(CAN)
+					break readlines
+				}
+				k = line
+				state++ // state is 1 now
+				continue readlines
+
+			case 1: // state 1 reads val
+				if len(line) > VAL_LIMIT {
+					tp.PrintfLine(CAN)
+					break readlines
+				}
+				v = line
+				numBy -= len(line)
+
+				// TODO!
+				// got a k,v pair!
+
+				// process Set request to db
+
+				// store reply in slice and reply in one batch
+				// or flush frequently to cli
+				// or pass answer to cli now
+				// ????
+
+				log.Printf("SOCKET recv k='%s' v='%s' rep=%d", k, v, len(reply))
+				state++ // state is 2 now
+				continue readlines
+
+			case 2: // state 2 reads ETB or BEL
+				if len(line) != 1 {
+					tp.PrintfLine(CAN)
+					break readlines
+				}
+				switch line {
+				case ETB:
+					// client finished streaming command: SET
+					mode = no_mode
+					state = -2 // command done
+					// state reverts when client sends next command
 					continue readlines
-
-				case 1: // state 1 reads val
-					if len(line) > VAL_LIMIT {
-						tp.PrintfLine(CAN)
-						break readlines
-					}
-					v = line
-					numBy -= len(line)
-
-					// TODO!
-					// got a k,v pair!
-
-					// process Set request to db
-
-					// store reply in slice and reply in one batch
-					// or flush frequently to cli
-					// or pass answer to cli now
-					// ????
-
-					log.Printf("SOCKET recv k='%s' v='%s' rep=%d", k, v, len(reply))
-					state++ // state is 2 now
+				case BEL:
+					// client continues sending k,v pairs
 					continue readlines
-
-				case 2: // state 2 reads ETB or BEL
-					if len(line) != 1 {
-						tp.PrintfLine(CAN)
-						break readlines
-					}
-					switch line {
-						case ETB:
-							// client finished streaming command: SET
-							mode = no_mode
-							state = -2 // command done
-							// state reverts when client sends next command
-							continue readlines
-						case BEL:
-							// client continues sending k,v pairs
-							continue readlines
-					}
+				}
 			}
 
 		case modeGET:
@@ -370,8 +370,8 @@ readlines:
 					log.Printf("Lock MemProfile run=(%d sec) wait=(%d sec)", runi, waiti)
 					c.mem.Lock()
 					log.Printf("StartMemProfile run=(%d sec) wait=(%d sec)", runi, waiti)
-					run := time.Duration(runi)*time.Second
-					wait := time.Duration(waiti)*time.Second
+					run := time.Duration(runi) * time.Second
+					wait := time.Duration(waiti) * time.Second
 					Prof.StartMemProfile(run, wait)
 					c.mem.Unlock()
 				}(runi, waiti)

@@ -9,7 +9,7 @@ type XDatabase struct {
 	XDICK *XDICK
 }
 
-func NewDICK(logger *ilog.LOG, sdCh chan uint32, waitCh chan struct{}) *XDatabase {
+func NewDICK(logger ilog.ILOG, sdCh chan uint32, waitCh chan struct{}) *XDatabase {
 	returnsubDICKs := make(chan []*SubDICK, 1)
 	xdick := NewXDICK(logger, sdCh, returnsubDICKs)
 	db := &XDatabase{

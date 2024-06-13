@@ -36,7 +36,7 @@ type XDICK struct {
 	//SubDICKs [DEFAULT_SUBDICKS]*SubDICK
 	SubDICKs []*SubDICK
 	SubCount uint32
-	logger   *ilog.LOG
+	logger   ilog.ILOG
 }
 
 type SubDICK struct {
@@ -44,14 +44,14 @@ type SubDICK struct {
 	submux     sync.RWMutex
 	hashTables [2]*DickTable
 	rehashidx  int
-	logger     *ilog.LOG
+	logger     ilog.ILOG
 }
 
 // NewXDICK returns a new instance of XDICK.
 //
 // The function does not take any parameters.
 // It returns a pointer to XDICK.
-func NewXDICK(logger *ilog.LOG, sdCh chan uint32, returnsubDICKs chan []*SubDICK) *XDICK {
+func NewXDICK(logger ilog.ILOG, sdCh chan uint32, returnsubDICKs chan []*SubDICK) *XDICK {
 	var mainmux sync.RWMutex
 	//getSubDICKs := make(chan *SubDICK) // unbuffered
 
