@@ -1,1 +1,3 @@
-GOPROXY=direct GOPRIVATE=github.com/go-while/nodare-db-dev go mod tidy 
+#!/bin/bash
+. ./env.sh
+go mod tidy 

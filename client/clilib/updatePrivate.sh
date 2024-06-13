@@ -1,1 +1,3 @@
-GOPROXY=direct GOPRIVATE=github.com/go-while/nodare-db go get -u
+#!/bin/bash
+. ../../env.sh
+go get -u
