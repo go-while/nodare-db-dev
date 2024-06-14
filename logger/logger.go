@@ -50,7 +50,7 @@ func GetEnvLOGLEVEL() int {
 	if logstr, ok := os.LookupEnv("LOGLEVEL"); ok {
 		return GetLOGLEVEL(logstr)
 	}
-	return -1
+	return INFO //default to INFO
 }
 
 func GetLOGLEVEL(loglvl string) (retval int) {
