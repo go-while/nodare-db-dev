@@ -12,7 +12,7 @@ import (
 const MODE = 1
 
 var (
-	flag_config   string
+	flag_configfile   string
 	flag_logfile  string
 	flag_hashmode int
 
@@ -28,15 +28,16 @@ func main() {
 	server.Prof = Prof
 
 	// capture the flags: overwrites config file settings!
-	flag.StringVar(&flag_config, "conf", server.DEFAULT_CONFIG_FILE, "path to config.toml")
+	flag.StringVar(&flag_configfile, "config", server.DEFAULT_CONFIG_FILE, "path to config.toml")
 	flag.IntVar(&flag_hashmode, "hashmode", database.HASH_FNV64A, "sets hashmode:\n sipHash = 1\n FNV32A = 2\n FNV64A = 3\n")
 	flag.StringVar(&flag_logfile, "logfile", "", "path to ndb.log")
 	flag.Parse()
-	//cfg, sub_dicks := NewViperConf(conf, logs)
 
 	database.HASHER = setHASHER
 	// this first line prints LOGLEVEL="XX" to console but will never showup in logfile!
 	logs := ilog.NewLogger(ilog.GetEnvLOGLEVEL(), flag_logfile)
+	//cfg, sub_dicks := NewViperConf(flag_configfile, logs)
+	cfg, sub_dicks := server.NewViperConf(flag_configfile, logs)
 
 	suckDickCh := make(chan uint32, 1) // buffered or deadlocks
 	waitCh := make(chan struct{})      // unbuffered is fine here
@@ -48,7 +49,7 @@ func main() {
 			db.XDICK.GenerateSALT()
 		}
 		ndbServer := server.NewXNDBServer(db, logs)
-		srv, vcfg, sub_dicks := server.NewFactory().NewNDBServer(flag_config, ndbServer, logs)
+		srv, vcfg, sub_dicks := server.NewFactory().NewNDBServer(flag_configfile, ndbServer, logs)
 		logs.Debug("Mode 1: Loaded vcfg='%#v'", vcfg)
 		suckDickCh <- sub_dicks // read sub_dicks from config, pass to suckDickCh so we can create subDICKs
 		logs.Debug("Mode 1: Created DB sub_dicks=%d", sub_dicks)
