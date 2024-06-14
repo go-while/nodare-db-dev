@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"github.com/go-while/nodare-db-dev/database"
 	"github.com/go-while/nodare-db-dev/logger"
+	"github.com/gorilla/mux"
 	"net/http"
 )
 
 const KEY_PARAM = "key"
 
 type WebMux interface {
-	CreateMux() *http.ServeMux
+	CreateMux() (*mux.Router)
 	HandlerGetValByKey(w http.ResponseWriter, r *http.Request)
 	HandlerSet(w http.ResponseWriter, r *http.Request)
 	HandlerDel(w http.ResponseWriter, r *http.Request)
@@ -28,16 +29,19 @@ func NewXNDBServer(db *database.XDatabase, logs ilog.ILOG) *XNDBServer {
 	}
 }
 
-func (srv *XNDBServer) CreateMux() *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /get/{"+KEY_PARAM+"}", srv.HandlerGetValByKey)
-	mux.HandleFunc("POST /set", srv.HandlerSet)
-	mux.HandleFunc("GET /del/{"+KEY_PARAM+"}", srv.HandlerDel)
-	return mux
+func (srv *XNDBServer) CreateMux() (*mux.Router) {
+	r := mux.NewRouter()
+	//r.HandleFunc("/jkv/{"+KEY_PARAM+"}", srv.HandlerGetJsonBlobByKey)
+	//r.HandleFunc("/jnv/{"+KEY_PARAM+"}", srv.HandlerGetJsonValByKey)
+	r.HandleFunc("/get/{"+KEY_PARAM+"}", srv.HandlerGetValByKey)
+	r.HandleFunc("/set", srv.HandlerSet)
+	r.HandleFunc("/del/{"+KEY_PARAM+"}", srv.HandlerDel)
+	return r
 }
 
 func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request) {
 	nilheader(w)
+	srv.logs.Info("HandlerGetValByKey1")
 
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -45,7 +49,9 @@ func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	key := r.PathValue(KEY_PARAM)
+	vars := mux.Vars(r)
+	key := vars[KEY_PARAM]
+
 	if key == "" {
 		w.WriteHeader(http.StatusNotAcceptable) // 406
 		return
@@ -53,6 +59,7 @@ func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request
 
 	val := srv.db.Get(key)
 	if val == nil {
+		srv.logs.Info("not found key='%s'", key)
 		w.WriteHeader(http.StatusGone) // 410
 		return
 	}
@@ -120,7 +127,8 @@ func (srv *XNDBServer) HandlerDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := r.PathValue(KEY_PARAM)
+	vars := mux.Vars(r)
+	key := vars[KEY_PARAM]
 	if key == "" {
 		w.WriteHeader(http.StatusNotAcceptable) // 406
 		return

@@ -2,9 +2,6 @@ package server
 
 import (
 	"github.com/go-while/nodare-db-dev/logger"
-	"os"
-	//"log"
-	"strconv"
 	"sync"
 )
 
@@ -41,11 +38,3 @@ func (f *Factory) NewNDBServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG) (s
 	}
 	return
 } // end func NewNDBServer
-
-func (f *Factory) getEnvTLSEnabled() bool {
-	isTLSEnabled, _ := strconv.ParseBool(os.Getenv("NDB_TLS_ENABLED"))
-	if isTLSEnabled {
-		return true
-	}
-	return false
-}
