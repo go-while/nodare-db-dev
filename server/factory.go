@@ -16,11 +16,9 @@ func NewFactory() *Factory {
 	return &Factory{}
 }
 
-func (f *Factory) NewNDBServer(conf string, ndbServer WebMux, logs ilog.ILOG) (srv Server, cfg VConfig, sub_dicks uint32) {
+func (f *Factory) NewNDBServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG) (srv Server) {
 	f.mux.Lock()
 	defer f.mux.Unlock()
-
-	cfg, sub_dicks = NewViperConf(conf, logs)
 
 	bootsocket := false
 	if bootsocket {
@@ -35,11 +33,11 @@ func (f *Factory) NewNDBServer(conf string, ndbServer WebMux, logs ilog.ILOG) (s
 	case false:
 		// TCP WEB SERVER
 		srv = NewHttpServer(cfg, ndbServer, logs)
-		logs.Debug("Factory TCP WEB\n srv='%#v'\n^EOL\n\n cfg='%#v'\n^EOL sub_dicks=%d loglevel=%d\n\n", srv, cfg, sub_dicks, logs.GetLOGLEVEL())
+		logs.Debug("Factory TCP WEB\n srv='%#v'\n^EOL\n\n cfg='%#v'\n^EOL loglevel=%d\n\n", srv, cfg, logs.GetLOGLEVEL())
 	case true:
 		// TLS WEB SERVER
 		srv = NewHttpsServer(cfg, ndbServer, logs)
-		logs.Debug("Factory TLS WEB\n  srv='%#v'\n^EOL\n\n cfg='%#v'\n^EOL sub_dicks=%d loglevel=%d\n\n", cfg, srv, sub_dicks, logs.GetLOGLEVEL())
+		logs.Debug("Factory TLS WEB\n  srv='%#v'\n^EOL\n\n cfg='%#v'\n^EOL loglevel=%d\n\n", cfg, srv, logs.GetLOGLEVEL())
 	}
 	return
 } // end func NewNDBServer

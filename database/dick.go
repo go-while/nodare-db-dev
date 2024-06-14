@@ -55,38 +55,28 @@ type SubDICK struct {
 //
 // The function does not take any parameters.
 // It returns a pointer to XDICK.
-func NewXDICK(logs ilog.ILOG, suckDickCh chan uint32, returnsubDICKs chan []*SubDICK) *XDICK {
+func NewXDICK(logs ilog.ILOG, sub_dicks uint32/*, suckDickCh chan uint32, returnsubDICKs chan []*SubDICK*/) *XDICK {
 	var mainmux sync.RWMutex
-
-	go func(suckDickCh chan uint32, returnsubDICKs chan []*SubDICK) {
-		logs.Debug("NewXDICK: creating SubDICKs waits async for configs to load!")
-		sub_dicks := <-suckDickCh // after NewFactory waits for sub_dicks
-		suckDickCh <- sub_dicks   // re-push in so NewDICK() can set SubCount
-		created := 0
-		var subDICKs []*SubDICK
-		for i := uint32(0); i < sub_dicks; i++ {
-			subDICK := &SubDICK{
-				parent:     &mainmux,
-				hashTables: [2]*DickTable{NewDickTable(0), NewDickTable(0)},
-				rehashidx:  -1,
-				logs:       logs,
-			}
-			subDICKs = append(subDICKs, subDICK)
-			created++
-		} // end for
-
-		returnsubDICKs <- subDICKs
-		close(returnsubDICKs)
-		logs.Debug("Created subDICKs %d/%d ", sub_dicks, created)
-	}(suckDickCh, returnsubDICKs) // end go func
-
 	xdick := &XDICK{
 		pcas: pcashash.New(),
 		//hashmode: HASHER,
 		mainmux:  mainmux,
-		SubDICKs: nil, // sets later
+		SubCount: sub_dicks,
 		logs:     logs,
 	}
+	for i := uint32(0); i < sub_dicks; i++ {
+		subDICK := &SubDICK{
+			parent:     &mainmux,
+			hashTables: [2]*DickTable{NewDickTable(0), NewDickTable(0)},
+			rehashidx:  -1,
+			logs:       logs,
+		}
+		xdick.SubDICKs = append(xdick.SubDICKs, subDICK)
+	} // end for
+	for j := uint32(0); j < sub_dicks; j++ {
+		go xdick.watchDog(j)
+	}
+	logs.Debug("Created subDICKs %d/%d ", len(xdick.SubDICKs), sub_dicks)
 	return xdick
 }
 
