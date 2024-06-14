@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/dchest/siphash"
+	pcashash "github.com/go-while/nodare-db-dev/pcas_hash"
 	"github.com/go-while/nodare-db-dev/logger"
 	//"log"
 	"hash/fnv"
@@ -16,9 +17,9 @@ import (
 const (
 	INITIAL_SIZE = int64(128)
 	MAX_SIZE     = 1 << 63
-	HASH_siphash = 0xFF
-	HASH_FNV32A  = 0x32A
-	HASH_FNV64A  = 0x64A
+	HASH_siphash = 0x01
+	HASH_FNV32A  = 0x02
+	HASH_FNV64A  = 0x03
 )
 
 // experiment! MOD can be 10, 100, 1000, 10000
@@ -32,11 +33,14 @@ var HASHER = HASH_siphash
 
 type XDICK struct {
 	//hashmode     int // mode of hashing
-	mainmux sync.RWMutex // not used anywhere but exists for whatever reason we may find
-	//SubDICKs [DEFAULT_SUBDICKS]*SubDICK
+	// mainmux is not used anywhere but exists
+	//  for whatever reason we may find
+	//   subdicks can lock XDICK
+	mainmux sync.RWMutex
 	SubDICKs []*SubDICK
 	SubCount uint32
-	logs   ilog.ILOG
+	logs     ilog.ILOG
+	pcas     *pcashash.Hash // can calulate hashs go objects
 }
 
 type SubDICK struct {
@@ -44,21 +48,20 @@ type SubDICK struct {
 	submux     sync.RWMutex
 	hashTables [2]*DickTable
 	rehashidx  int
-	logs     ilog.ILOG
+	logs       ilog.ILOG
 }
 
 // NewXDICK returns a new instance of XDICK.
 //
 // The function does not take any parameters.
 // It returns a pointer to XDICK.
-func NewXDICK(logs ilog.ILOG, sdCh chan uint32, returnsubDICKs chan []*SubDICK) *XDICK {
+func NewXDICK(logs ilog.ILOG, suckDickCh chan uint32, returnsubDICKs chan []*SubDICK) *XDICK {
 	var mainmux sync.RWMutex
-	//getSubDICKs := make(chan *SubDICK) // unbuffered
 
-	go func(sdCh chan uint32, returnsubDICKs chan []*SubDICK) {
+	go func(suckDickCh chan uint32, returnsubDICKs chan []*SubDICK) {
 		logs.Debug("NewXDICK: creating SubDICKs waits async for configs to load!")
-		sub_dicks := <-sdCh // after NewFactory waits for sub_dicks
-		sdCh <- sub_dicks   // re-push in so NewDICK() can set SubCount
+		sub_dicks := <-suckDickCh // after NewFactory waits for sub_dicks
+		suckDickCh <- sub_dicks   // re-push in so NewDICK() can set SubCount
 		created := 0
 		var subDICKs []*SubDICK
 		for i := uint32(0); i < sub_dicks; i++ {
@@ -66,7 +69,7 @@ func NewXDICK(logs ilog.ILOG, sdCh chan uint32, returnsubDICKs chan []*SubDICK) 
 				parent:     &mainmux,
 				hashTables: [2]*DickTable{NewDickTable(0), NewDickTable(0)},
 				rehashidx:  -1,
-				logs:     logs,
+				logs:       logs,
 			}
 			subDICKs = append(subDICKs, subDICK)
 			created++
@@ -75,13 +78,14 @@ func NewXDICK(logs ilog.ILOG, sdCh chan uint32, returnsubDICKs chan []*SubDICK) 
 		returnsubDICKs <- subDICKs
 		close(returnsubDICKs)
 		logs.Debug("Created subDICKs %d/%d ", sub_dicks, created)
-	}(sdCh, returnsubDICKs) // end go func
+	}(suckDickCh, returnsubDICKs) // end go func
 
 	xdick := &XDICK{
+		pcas: pcashash.New(),
 		//hashmode: HASHER,
 		mainmux:  mainmux,
 		SubDICKs: nil, // sets later
-		logs:   logs,
+		logs:     logs,
 	}
 	return xdick
 }

@@ -1,18 +1,20 @@
 package main
 
 import (
+	"flag"
 	"github.com/go-while/go-cpu-mem-profiler"
 	"github.com/go-while/nodare-db-dev/database"
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/server"
-	"flag"
 	"log"
 )
 
 const MODE = 1
 
 var (
-	flag_config string
+	flag_config   string
+	flag_logfile  string
+	flag_hashmode int
 
 	Prof *prof.Profiler
 	// setHASHER sets prefered hash algo
@@ -25,24 +27,30 @@ func main() {
 	Prof = prof.NewProf()
 	server.Prof = Prof
 
-	// capture the flags
-	flag.StringVar(&flag_config, "conf", "config.toml", "path to config.toml")
+	// capture the flags: overwrites config file settings!
+	flag.StringVar(&flag_config, "conf", server.DEFAULT_CONFIG_FILE, "path to config.toml")
+	flag.IntVar(&flag_hashmode, "hashmode", database.HASH_FNV64A, "sets hashmode:\n sipHash = 1\n FNV32A = 2\n FNV64A = 3\n")
+	flag.StringVar(&flag_logfile, "logfile", "", "path to ndb.log")
+	flag.Parse()
+	//cfg, sub_dicks := NewViperConf(conf, logs)
 
 	database.HASHER = setHASHER
-	logs := ilog.NewLogger(ilog.GetEnvLOGLEVEL())
-	sdCh := make(chan uint32, 1)  // buffered or deadlocks
-	waitCh := make(chan struct{}) // unbuffered is fine here
+	// this first line prints LOGLEVEL="XX" to console but will never showup in logfile!
+	logs := ilog.NewLogger(ilog.GetEnvLOGLEVEL(), flag_logfile)
+
+	suckDickCh := make(chan uint32, 1) // buffered or deadlocks
+	waitCh := make(chan struct{})      // unbuffered is fine here
 
 	switch MODE {
 	case 1:
-		db := database.NewDICK(logs, sdCh, waitCh)
+		db := database.NewDICK(logs, suckDickCh, waitCh)
 		if database.HASHER == database.HASH_siphash {
 			db.XDICK.GenerateSALT()
 		}
 		ndbServer := server.NewXNDBServer(db, logs)
 		srv, vcfg, sub_dicks := server.NewFactory().NewNDBServer(flag_config, ndbServer, logs)
 		logs.Debug("Mode 1: Loaded vcfg='%#v'", vcfg)
-		sdCh <- sub_dicks // read sub_dicks from config, pass to sdCh so we can create subDICKs
+		suckDickCh <- sub_dicks // read sub_dicks from config, pass to suckDickCh so we can create subDICKs
 		logs.Debug("Mode 1: Created DB sub_dicks=%d", sub_dicks)
 		<-waitCh
 		logs.Debug("Mode 1: Booted sub_dicks=%d srv='%v'", sub_dicks, srv)

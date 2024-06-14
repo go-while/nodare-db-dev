@@ -16,7 +16,7 @@ const DEFAULT_CONFIG_FILE = "config.toml"
 const DATA_DIR = "dat"
 const CONFIG_DIR = "cfg"
 
-const DEFAULT_LOGS_FILE = "db.log"
+const DEFAULT_LOGS_FILE = "ndb.log"
 const DEFAULT_LOGLEVEL_STR = "INFO"
 const DEFAULT_LOGLEVEL_INT = ilog.INFO
 
@@ -80,7 +80,6 @@ const EOM = string(0x19) // End of medium 		// 25
 const SUB = string(0x20) // Substitute  		// 26
 const ESC = string(0x1B) // Escape 				// 27
 
-
 // VIPER CONFIG DEFAULTS
 
 const V_DEFAULT_SUB_DICKS = "100"
@@ -89,13 +88,12 @@ const V_DEFAULT_NET_WEBSRV_READ_TIMEOUT = 5
 const V_DEFAULT_NET_WEBSRV_WRITE_TIMEOUT = 10
 const V_DEFAULT_NET_WEBSRV_IDLE_TIMEOUT = 120
 
-
 // VIPER CONFIG KEYS
 const VK_ACCESS_SUPERADMIN_USER = "server.superadmin_user"
 const VK_ACCESS_SUPERADMIN_PASS = "server.superadmin_pass"
 
 const VK_LOG_LOGLEVEL = "log.loglevel"
-const VK_LOG_LOGFILE = "log.logFile"
+const VK_LOG_LOGFILE = "log.logfile"
 
 const VK_SETTINGS_BASE_DIR = "settings.base_dir"
 const VK_SETTINGS_DATA_DIR = "settings.data_dir"

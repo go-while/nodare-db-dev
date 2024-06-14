@@ -35,10 +35,14 @@ type LOG struct {
 	wrote    int // counts bytes
 }
 
-func NewLogger(lvl int) ILOG {
-	return &LOG{
+func NewLogger(lvl int, logfile string) ILOG {
+	logs := &LOG{
 		LOGLEVEL: lvl,
 	}
+	if logfile != "" {
+		logs.LogStart(logfile)
+	}
+	return logs
 }
 
 func GetEnvLOGLEVEL() int {
@@ -77,17 +81,17 @@ func (l *LOG) IfDebug() bool {
 }
 
 func (l *LOG) GetLOGLEVEL() int {
-	l.mux.Lock()
-	defer l.mux.Unlock()
+	l.mux.RLock()
 	l.Info("LOGLEVEL=%d", l.LOGLEVEL)
+	l.mux.RUnlock()
 	return l.LOGLEVEL
 }
 
 func (l *LOG) SetLOGLEVEL(lvl int) {
 	l.mux.Lock()
-	defer l.mux.Unlock()
 	l.LOGLEVEL = lvl
-	l.Info("LOGLEVEL=%d", lvl)
+	l.mux.Unlock()
+	l.Info("SetLOGLEVEL LOGLEVEL=%d", lvl)
 	log.Printf("SetLOGLEVEL = %d", lvl)
 }
 
@@ -117,6 +121,7 @@ func (l *LOG) LogClose() {
 	defer l.mux.Unlock()
 	if l.LogFile != nil {
 		l.LogFile.Close()
+		l.LogFile = nil
 	}
 }
 

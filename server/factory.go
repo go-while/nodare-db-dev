@@ -2,8 +2,8 @@ package server
 
 import (
 	"github.com/go-while/nodare-db-dev/logger"
-	"log"
 	"os"
+	//"log"
 	"strconv"
 	"sync"
 )
@@ -16,28 +16,33 @@ func NewFactory() *Factory {
 	return &Factory{}
 }
 
-func (f *Factory) NewNDBServer(conf string, ndbServer WebMux, logs ilog.ILOG) (srv Server, vcfg VConfig, sub_dicks uint32) {
+func (f *Factory) NewNDBServer(conf string, ndbServer WebMux, logs ilog.ILOG) (srv Server, cfg VConfig, sub_dicks uint32) {
 	f.mux.Lock()
 	defer f.mux.Unlock()
 
+	cfg, sub_dicks = NewViperConf(conf, logs)
 
-	if f.getEnvTLSEnabled() {
-		srv, vcfg, sub_dicks = NewHttpsServer(conf, ndbServer, logs)
-		log.Printf("Factory TLS srv='%#v'", srv)
+	bootsocket := false
+	if bootsocket {
 		//_ = NewSocketHandler(srv)
 		//sockets.Start()
-		return
 	}
-
-
-	srv, vcfg, sub_dicks = NewHttpServer(conf, ndbServer, logs)
-	lvlstr := vcfg.GetString(VK_LOG_LOGLEVEL)
-	lvlint := ilog.GetLOGLEVEL(lvlstr)
-	logs.SetLOGLEVEL(lvlint)
-	log.Printf("Factory TCP srv='%#v' vcfg='%#v' sub_dicks=%d lvlstr='%s'=%d loglvl=%d", srv, vcfg, sub_dicks, lvlstr, lvlint, logs.GetLOGLEVEL())
+	tls_enabled := cfg.GetBool(VK_SEC_TLS_ENABLED)
+	logfile := cfg.GetString(VK_LOG_LOGFILE)
+	logs.LogStart(logfile)
+	logs.Info("factory: viper cfg loaded tls_enabled=%t logfile='%s'", tls_enabled, logfile)
+	switch tls_enabled {
+	case false:
+		// TCP WEB SERVER
+		srv = NewHttpServer(cfg, ndbServer, logs)
+		logs.Debug("Factory TCP WEB\n srv='%#v'\n^EOL\n\n cfg='%#v'\n^EOL sub_dicks=%d loglevel=%d\n\n", srv, cfg, sub_dicks, logs.GetLOGLEVEL())
+	case true:
+		// TLS WEB SERVER
+		srv = NewHttpsServer(cfg, ndbServer, logs)
+		logs.Debug("Factory TLS WEB\n  srv='%#v'\n^EOL\n\n cfg='%#v'\n^EOL sub_dicks=%d loglevel=%d\n\n", cfg, srv, sub_dicks, logs.GetLOGLEVEL())
+	}
 	return
-}
-
+} // end func NewNDBServer
 
 func (f *Factory) getEnvTLSEnabled() bool {
 	isTLSEnabled, _ := strconv.ParseBool(os.Getenv("NDB_TLS_ENABLED"))

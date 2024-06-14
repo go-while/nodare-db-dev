@@ -17,6 +17,7 @@ type VConfig interface {
 	Get(key string) interface{}
 	GetString(key string) string
 	GetInt(key string) int
+	GetInt64(key string) int64
 	GetUint32(key string) uint32
 	GetUint64(key string) uint64
 	GetBool(key string) bool
@@ -25,7 +26,7 @@ type VConfig interface {
 
 type ViperConfig struct {
 	viper            *viper.Viper
-	logs           ilog.ILOG
+	logs             ilog.ILOG
 	mapsEnvsToConfig map[string]string
 }
 
@@ -34,7 +35,7 @@ type ViperConfig struct {
 func (c *ViperConfig) checkFileExists(filePath string) bool {
 	_, error := os.Stat(filePath)
 	return !errors.Is(error, os.ErrNotExist)
-}
+} // end func checkFileExists
 
 func (c *ViperConfig) createDirectory(dirPath string) {
 	err := os.MkdirAll(dirPath, 0755)
@@ -46,7 +47,7 @@ func (c *ViperConfig) createDirectory(dirPath string) {
 	default:
 		c.logs.Info("Error creating directory: %v", err)
 	}
-}
+} // end func createDirectory
 
 func (c *ViperConfig) createDefaultConfigFile(cfgFile string) {
 
@@ -60,6 +61,10 @@ func (c *ViperConfig) createDefaultConfigFile(cfgFile string) {
 
 	c.viper.SetDefault(VK_LOG_LOGLEVEL, DEFAULT_LOGLEVEL_STR)
 	c.viper.SetDefault(VK_LOG_LOGFILE, DEFAULT_LOGS_FILE)
+
+	log.Printf("createDefaultConfigFile: loglevel loaded to %s", c.viper.GetString(VK_LOG_LOGLEVEL))
+
+	c.logs.SetLOGLEVEL(ilog.GetLOGLEVEL(c.viper.GetString(VK_LOG_LOGLEVEL)))
 
 	c.viper.SetDefault(VK_SETTINGS_BASE_DIR, DOT)
 	c.viper.SetDefault(VK_SETTINGS_DATA_DIR, DATA_DIR)
@@ -83,10 +88,15 @@ func (c *ViperConfig) createDefaultConfigFile(cfgFile string) {
 	c.viper.SetDefault(VK_SERVER_SOCKET_PORT_TCP, DEFAULT_SERVER_SOCKET_TCP_PORT)
 	c.viper.SetDefault(VK_SERVER_SOCKET_PORT_TLS, DEFAULT_SERVER_SOCKET_TLS_PORT)
 
+	log.Printf("WriteConfigAs %s", cfgFile)
+	if c.logs.IfDebug() {
+		c.PrintConfigsToConsole()
+	}
 	c.viper.WriteConfigAs(cfgFile)
 
-	fmt.Printf("\nIMPORTANT! Generated ADMIN credentials! \n superadmin login: '%s' password: %s\n\n", suadminuser, suadminpass)
-}
+	fmt.Printf("\n IMPORTANT!\n  Generated ADMIN credentials!\n     login: '%s'\n     password: '%s'\n\n ==> createDefaultConfigFile OK\n", suadminuser, suadminpass)
+
+} // end func createDefaultConfigFile
 
 func (c *ViperConfig) mapEnvsToConf() {
 
@@ -120,16 +130,21 @@ func (c *ViperConfig) mapEnvsToConf() {
 
 func (c *ViperConfig) ReadConfigsFromEnvs() {
 	c.logs.Debug("READ ENV VARS")
-	for key, value := range c.mapsEnvsToConfig {
-		valueFromEnv, ok := os.LookupEnv(value)
-		if ok {
-			c.logs.Info("NEW ENV VK='%s' envK='%v' valueFromEnv='%s", key, value, valueFromEnv)
-			c.viper.Set(key, valueFromEnv)
-		} else {
-			c.logs.Debug("NO ENV VK='%s' valueFromEnv='%s' !ok", key, valueFromEnv)
+	for key, envK := range c.mapsEnvsToConfig {
+		valueFromEnv, ok := os.LookupEnv(envK)
+		if !ok {
+			c.logs.Debug("NO ENV envK='%s'", envK)
+			continue
 		}
+		c.logs.Info("NEW ENV envK='%s' ==> '%s'", envK, valueFromEnv)
+		switch envK {
+		case "LOGLEVEL":
+			valueFromEnv = strings.ToUpper(valueFromEnv)
+			c.logs.SetLOGLEVEL(ilog.GetLOGLEVEL(valueFromEnv))
+		}
+		c.viper.Set(key, valueFromEnv)
 	}
-}
+} // end func ReadConfigsFromEnvs
 
 func (c *ViperConfig) initDB() (sub_dicks uint32) {
 
@@ -193,6 +208,40 @@ func NewViperConf(cfgFile string, logs ilog.ILOG) (VConfig, uint32) {
 
 	c.ReadConfigsFromEnvs()
 	sub_dicks := c.initDB()
-	c.PrintConfigsToConsole()
+	if c.logs.IfDebug() {
+		c.PrintConfigsToConsole()
+	}
 	return c.viper, sub_dicks
 } // end func NewViperConf
+
+func (c *ViperConfig) Get(key string) interface{} {
+	return c.viper.Get(key)
+}
+
+func (c *ViperConfig) GetString(key string) string {
+	return c.viper.GetString(key)
+}
+
+func (c *ViperConfig) GetBool(key string) bool {
+	return c.viper.GetBool(key)
+}
+
+func (c *ViperConfig) GetInt(key string) int {
+	return c.viper.GetInt(key)
+}
+
+func (c *ViperConfig) GetInt64(key string) int64 {
+	return c.viper.GetInt64(key)
+}
+
+func (c *ViperConfig) GetUint32(key string) uint32 {
+	return c.viper.GetUint32(key)
+}
+
+func (c *ViperConfig) GetUint64(key string) uint64 {
+	return c.viper.GetUint64(key)
+}
+
+func (c *ViperConfig) IsSet(key string) bool {
+	return c.viper.IsSet(key)
+}
