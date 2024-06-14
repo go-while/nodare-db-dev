@@ -82,9 +82,10 @@ func (l *LOG) IfDebug() bool {
 
 func (l *LOG) GetLOGLEVEL() int {
 	l.mux.RLock()
-	l.Info("LOGLEVEL=%d", l.LOGLEVEL)
+	lvl := l.LOGLEVEL
 	l.mux.RUnlock()
-	return l.LOGLEVEL
+	l.Info("LOGLEVEL=%d", lvl)
+	return lvl
 }
 
 func (l *LOG) SetLOGLEVEL(lvl int) {
