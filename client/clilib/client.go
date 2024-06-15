@@ -2,6 +2,7 @@
 package client
 
 import (
+	"flag"
 	"bytes"
 	"crypto/tls"
 	"fmt"
@@ -54,7 +55,31 @@ type Client struct {
 }
 
 func NewClient(opts *Options) (*Client, error) {
+	switch opts.Addr {
+		case "":
+			// no addr:port supplied
+			switch opts.Mode {
+				case 1:
+					// wants http(s)
+					switch opts.SSL {
+						case true:
+							opts.Addr = DefaultAddrSSL
+						default:
+							opts.Addr = DefaultAddr
+					}
+				case 2:
+					// wants socket
+					switch opts.SSL {
+						case true:
+							opts.Addr = DefaultAddrTLSsocket
+						default:
+							opts.Addr = DefaultAddrTCPsocket
+					} // end switch SSL
+			} // end switch Mode
+	} // end switch Addr
+
 	log.Printf("NewClient opts='%#v'", opts)
+	// setup new client
 	client := &Client{
 		logger:     ilog.NewLogger(ilog.GetEnvLOGLEVEL()),
 		addr:       opts.Addr,
