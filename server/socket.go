@@ -433,8 +433,8 @@ readlines:
 				}
 				switch line {
 				case ETB:
-					getloopkeys:
 					lenk := len(keys)
+					getloopkeys:
 					for _, akey := range keys {
 						var val interface{}
 						sock.db.Get(akey, &val)
@@ -668,7 +668,7 @@ readlines:
 		continue readlines
 	} // end for readlines
 
-	c.logs.Info("handleConn LEFT [cli=%d] conn rx=%d tx=%d", cli.id, recvbytes, sentbytes)
+	sock.logs.Info("SOCKET [cli=%d] LEFT conn rx=%d tx=%d", cli.id, recvbytes, sentbytes)
 } // end func handleConn
 
 func getRemoteIP(conn net.Conn) string {
