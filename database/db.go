@@ -19,8 +19,9 @@ func NewDICK(logs ilog.ILOG, sub_dicks uint32) *XDatabase {
 	return db
 }
 
-func (db *XDatabase) Get(key string) interface{} {
-	return db.XDICK.Get(key)
+func (db *XDatabase) Get(key string, val *interface{}) {
+	*val = db.XDICK.Get(key)
+	return
 }
 
 func (db *XDatabase) Set(key string, value interface{}) error {

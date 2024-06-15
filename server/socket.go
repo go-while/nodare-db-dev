@@ -35,9 +35,14 @@ type SOCKET struct {
 	tlslistener    net.Listener
 	acl            *AccessControlList
 	id             uint64
-	tp             *textproto.Conn
-	conn           net.Conn
+
 }
+
+type CLI struct {
+	id             uint64
+	conn           net.Conn
+	tp             *textproto.Conn
+} // end CLI struct
 
 var (
 	DefaultACL map[string]bool // can be set before booting
@@ -75,46 +80,53 @@ func NewSocketHandler(cfg VConfig, logs ilog.ILOG, stop_chan chan struct{}, wg s
 	return sockets
 }
 
-func (c *SOCKET) CloseSocket() {
-	c.wg.Add(1)
-	defer c.wg.Done()
-	stopnotify := <-c.stop_chan // waits for signal from main
-	c.socketlistener.Close()
-	os.Remove(c.socketPath)
-	c.logs.Debug("Socket closed")
-	c.stop_chan <- stopnotify // push back in to notify others
+func (sock *SOCKET) CloseSocket() {
+	sock.wg.Add(1)
+	defer sock.wg.Done()
+	stopnotify := <-sock.stop_chan // waits for signal from main
+	sock.socketlistener.Close()
+	os.Remove(sock.socketPath)
+	sock.logs.Debug("Socket closed")
+	sock.stop_chan <- stopnotify // push back in to notify others
 }
 
-func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tlscrt string, tlskey string, tlsenabled bool) {
+func (sock *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tlscrt string, tlskey string, tlsenabled bool) {
 	// socket listener
 	go func(socketPath string) {
-		c.wg.Add(1)
-		defer c.wg.Done()
+		sock.wg.Add(1)
+		defer sock.wg.Done()
 		if socketPath == "" {
 			return
 		}
-		c.wg.Add(1)
-		defer c.wg.Done()
+		sock.wg.Add(1)
+		defer sock.wg.Done()
 		listener, err := net.Listen("unix", socketPath)
 		if err != nil {
 			log.Fatalf("ERROR SOCKET err='%v'", err)
 			return
 		}
-		c.logs.Info("SOCKET Path: %s", socketPath)
-		c.socketPath = socketPath
-		c.socketlistener = listener
-		go c.CloseSocket()
+		sock.logs.Info("SOCKET Path: %s", socketPath)
+		sock.socketPath = socketPath
+		sock.socketlistener = listener
+		go sock.CloseSocket()
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
-					c.logs.Info("Closing SOCKET")
+					sock.logs.Info("Closing SOCKET")
 					return
 				}
-				c.logs.Warn("SOCKET err='%v'", err)
+				sock.logs.Warn("SOCKET err='%v'", err)
 				continue
 			}
-			go c.handleSocketConn(conn, "", true)
+			sock.mux.Lock()
+			sock.id++
+			sock.mux.Unlock()
+			cli := &CLI{
+				conn: conn,
+				id: sock.id,
+			}
+			go sock.handleSocketConn(cli, "", true)
 		}
 	}(socketPath)
 
@@ -123,33 +135,40 @@ func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tl
 		if tcpListen == "" {
 			return
 		}
-		c.wg.Add(1)
-		defer c.wg.Done()
+		sock.wg.Add(1)
+		defer sock.wg.Done()
 		listener, err := net.Listen("tcp", tcpListen)
 		if err != nil {
 			log.Fatalf("ERROR SOCKET creating tcpListen err='%v'", err)
 			return
 		}
-		c.logs.Info("SOCKET TCP: %s", tcpListen)
+		sock.logs.Info("SOCKET TCP: %s", tcpListen)
 		defer listener.Close()
 		for {
 			conn, err := listener.Accept()
 			raddr := getRemoteIP(conn)
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
-					c.logs.Info("Closing TCP SOCKET")
+					sock.logs.Info("Closing TCP SOCKET")
 					return
 				}
-				c.logs.Warn("ERROR SOCKET accepting tcp err='%v'", err)
+				sock.logs.Warn("ERROR SOCKET accepting tcp err='%v'", err)
 				continue
 			}
-			if !c.acl.checkACL(conn) {
+			if !sock.acl.checkACL(conn) {
 				log.Printf("TCP SOCKET !ACL: '%s'", raddr)
 				conn.Close()
 				continue
 			}
 			log.Printf("TCP SOCKET newConn: '%s'", raddr)
-			go c.handleSocketConn(conn, raddr, false)
+			sock.mux.Lock()
+			sock.id++
+			sock.mux.Unlock()
+			cli := &CLI{
+				conn: conn,
+				id: sock.id,
+			}
+			go sock.handleSocketConn(cli, raddr, false)
 		}
 	}(tcpListen)
 
@@ -167,44 +186,50 @@ func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tl
 			//MinVersion: tls.VersionTLS12,
 			//MaxVersion: tls.VersionTLS13,
 		}
-		c.wg.Add(1)
-		defer c.wg.Done()
+		sock.wg.Add(1)
+		defer sock.wg.Done()
 		listener_ssl, err := tls.Listen("tcp", tlsListen, ssl_conf)
 		if err != nil {
 			log.Fatalf("ERROR SOCKET tls.Listen err='%v'", err)
 			return
 		}
 		defer listener_ssl.Close()
-		c.logs.Info("SOCKET TLS: %s", tlsListen)
+		sock.logs.Info("SOCKET TLS: %s", tlsListen)
 		for {
 			conn, err := listener_ssl.Accept()
 			raddr := getRemoteIP(conn)
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
-					c.logs.Info("Closing TLS SOCKET")
+					sock.logs.Info("Closing TLS SOCKET")
 					return
 				}
-				c.logs.Warn("ERROR TLS SOCKET accepting tcp err='%v'", err)
+				sock.logs.Warn("ERROR TLS SOCKET accepting tcp err='%v'", err)
 				continue
 			}
-			if !c.acl.checkACL(conn) {
+			if !sock.acl.checkACL(conn) {
 				log.Printf("SOCKET TLS !ACL: '%s'", raddr)
 				conn.Close()
 				continue
 			}
 			log.Printf("SOCKET TLS newConn: '%s'", raddr)
-			go c.handleSocketConn(conn, raddr, false)
+			sock.mux.Lock()
+			sock.id++
+			sock.mux.Unlock()
+			cli := &CLI{
+				conn: conn,
+				id: sock.id,
+			}
+			go sock.handleSocketConn(cli, raddr, false)
 		}
 	}(tlsListen, tlscrt, tlskey, tlsenabled)
 } // end func startServer
 
-func (c *SOCKET) handleSocketConn(conn net.Conn, raddr string, socket bool) {
-	defer conn.Close()
-	c.conn = conn
-	c.tp = textproto.NewConn(conn)
+func (sock *SOCKET) handleSocketConn(cli *CLI, raddr string, socket bool) {
+	defer cli.conn.Close()
+	cli.tp = textproto.NewConn(cli.conn)
 	if !socket {
 		// send welcome banner to incoming tcp connection
-		err := c.tp.PrintfLine("200 X") // server.ACK
+		err := cli.tp.PrintfLine("200 X") // server.ACK
 		if err != nil {
 			return
 		}
@@ -212,8 +237,8 @@ func (c *SOCKET) handleSocketConn(conn net.Conn, raddr string, socket bool) {
 	// counter
 	//var add, tmpadd uint64
 	var set, tmpset uint64
-	//var get, tmpget uint64
-	//var del, tmpdel uint64
+	var get, tmpget uint64
+	var del, tmpdel uint64
 
 	// session flags
 	var mode = no_mode
@@ -223,13 +248,17 @@ func (c *SOCKET) handleSocketConn(conn net.Conn, raddr string, socket bool) {
 	var key string
 	var keys []string
 	var vals map[string]*string
+	var sentbytes int
+	var recvbytes int
+
 readlines:
 	for {
-		line, err := c.tp.ReadLine()
+		line, err := cli.tp.ReadLine()
 		if err != nil {
-			log.Printf("Error handleConn err='%v'", err)
+			log.Printf("Error [cli=%d] handleConn err='%v'", cli.id, err)
 			break readlines
 		}
+		recvbytes += len(line)
 		// clients sends: CMD|num_of_lines\r\n
 		// followed by multiple lines with BEL byte \x07 as delim of k:v pairs
 		// with a single line containing a ETB \x17 when done:
@@ -262,10 +291,18 @@ readlines:
 		// 		AveryLonoooooongValue\r\n
 		// 		\x17\r\n
 
+		//	GET|1\r\n
+		// 		AveryLooongKey\r\n
+		//		\x17\r\n
+
 		//	GET|3\r\n
 		// 		AveryLooongKey\r\n
 		// 		AnotherLooooooooongKey\r\n
 		//		NeedMOaaaarKeysKey\r\n
+		//		\x17\r\n
+
+		//	DEL|1\r\n
+		// 		AveryLooongKey\r\n
 		//		\x17\r\n
 
 		//	DEL|5\r\n
@@ -279,11 +316,11 @@ readlines:
 
 		switch mode {
 		case modeADD:
-			log.Printf("SOCKET modeADD line='%#v'", line)
+			log.Printf("SOCKET [cli=%d] modeADD line='%#v'", cli.id, line)
 			// TODO process multiple Add lines here.
 
 		case modeSET:
-			log.Printf("SOCKET modeSET line='%#v'", line)
+			log.Printf("SOCKE [cli=%d] modeSET line='%#v'", cli.id, line)
 			// TODO process multiple Set lines here.
 
 			// receive first line with key at state 0
@@ -293,18 +330,18 @@ readlines:
 			// and send reply to client
 
 			switch state {
-			case 0: // state 0 reads key
+			case 0: // modeSET state 0 reads key
 				if len(line) > KEY_LIMIT {
-					c.tp.PrintfLine(CAN)
+					cli.tp.PrintfLine(CAN)
 					break readlines
 				}
 				key = line
-				state++ // state is 1 now
+				state++ // modeSET state is 1 now
 				continue readlines
 
 			case 1: // state 1 reads val
 				if len(line) > VAL_LIMIT {
-					c.tp.PrintfLine(CAN)
+					cli.tp.PrintfLine(CAN)
 					break readlines
 				}
 				// got a k,v pair!
@@ -315,50 +352,51 @@ readlines:
 				keys = append(keys, key)
 				vals[key] = &line
 
-				log.Printf("SOCKET modeSet state1 recv k='%s' v='%s' keys=%d vals=%d", key, line, len(keys), len(vals))
+				log.Printf("SOCKET [cli=%d] modeSet state1 recv k='%s' v='%s' keys=%d vals=%d", cli.id, key, line, len(keys), len(vals))
 				key = ""
-				state++ // state is 2 now
+				state++ // modeSET state is 2 now
 				continue readlines
 
-			case 2: // state 2 reads ETB or BEL
+			case 2: // modeSET state 2 reads ETB or BEL
 				if len(line) != 1 {
-					c.tp.PrintfLine(CAN)
+					cli.tp.PrintfLine(CAN)
 					break readlines
 				}
 
 				switch line {
 				case ETB:
-					log.Printf("SOCKET modeSet state2 got ETB")
+					log.Printf("SOCKET [cli=%d] modeSet state2 got ETB", cli.id)
 					// client finished streaming
 					// set key:val pairs
-					loopkeys:
+					setloopkeys:
 					for _, akey := range keys {
 						val := vals[akey]
-						seterr := c.db.Set(akey, *val)
+						seterr := sock.db.Set(akey, *val)
 						if seterr != nil {
-							c.logs.Error("SOCKET modeSet state2 seterr='%v'", seterr)
+							sock.logs.Error("SOCKET [cli=%d] modeSet state2 seterr='%v'", cli.id, seterr)
 							// reply error
-							_, ioerr := io.WriteString(c.conn, NUL+key)
+							n, ioerr := io.WriteString(cli.conn, NUL+key)
 							if ioerr != nil {
 								// could not send reply, peer disconnected?
-								c.logs.Error("SOCKET modeSet state2 reply seterr='%v' ioerr='%v'", seterr, ioerr)
+								sock.logs.Error("SOCKET [cli=%d] modeSet state2 reply seterr='%v' ioerr='%v'", cli.id, seterr, ioerr)
 								break readlines
 							}
-							continue loopkeys
+							sentbytes += n
+							continue setloopkeys
 						}
 						tmpset--
 						set++
-						c.logs.Info("SOCKET state2 ETB Set k='%s' v='%s'", akey, *val)
+						sock.logs.Info("SOCKET [cli=%d] state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
 					} // end for keys
 
 					// reply single ACK
-					c.logs.Info("SOCKET state2 reply ACK")
-					_, ioerr := io.WriteString(c.conn, ACK)
+					sock.logs.Info("SOCKET [cli=%d] state2 reply ACK", cli.id)
+					n, ioerr := io.WriteString(cli.conn, ACK+CRLF)
 					if ioerr != nil {
-						c.logs.Error("SOCKET modeSet state2 reply ioerr='%v'", ioerr)
+						sock.logs.Error("SOCKET [cli=%d] modeSet state2 reply ioerr='%v'", cli.id, ioerr)
 						break readlines
 					}
-
+					sentbytes += n
 					keys, vals = nil, nil
 					mode = no_mode
 					state = -2
@@ -366,21 +404,132 @@ readlines:
 					continue readlines
 
 				case BEL:
-					c.logs.Info("SOCKET modeSet state2 got BEL")
+					sock.logs.Info("SOCKET [cli=%d] modeSet state2 got BEL", cli.id)
 					// client continues sending k,v pairs
 					continue readlines
 				}
 			}
 
 		case modeGET:
-			c.logs.Info("SOCKET modeGET line='%#v'", line)
+			sock.logs.Info("SOCKET [cli=%d] modeGET line='%#v'", cli.id, line)
 			// TODO process multiple Get lines here.
+			switch state {
+
+			case 0: // modeGET state 0 reads key
+				if len(line) > KEY_LIMIT {
+					cli.tp.PrintfLine(CAN)
+					break readlines
+				}
+				numBy-- // decrease counter
+				tmpget++ // increase tmp counter, amount we have to get
+				keys = append(keys, line)
+				state++ // modeGET state is 1 now
+				continue readlines
+
+			case 1: // modeGET state 1 reads ETB or BEL
+				if len(line) != 1 {
+					cli.tp.PrintfLine(CAN)
+					break readlines
+				}
+				switch line {
+				case ETB:
+					getloopkeys:
+					lenk := len(keys)
+					for _, akey := range keys {
+						var val interface{}
+						sock.db.Get(akey, &val)
+						if val == nil {
+							sock.logs.Error("SOCKET [cli=%d] modeGet state1 val nil", cli.id)
+							// reply error
+							retstr := NUL
+							if lenk > 1 {
+								retstr = retstr+key
+							}
+							n, ioerr := io.WriteString(cli.conn, retstr+CRLF)
+							if ioerr != nil {
+								// could not send reply, peer disconnected?
+								sock.logs.Error("SOCKET [cli=%d] modeGet state1 replyERR ioerr='%v'", cli.id, ioerr)
+								break readlines
+							}
+							sentbytes += n
+							continue getloopkeys
+						}
+						n, ioerr := io.WriteString(cli.conn, val.(string)+CRLF)
+						if ioerr != nil {
+							// could not send reply, peer disconnected?
+							sock.logs.Error("SOCKET [cli=%d] modeGet state1 replyACK ioerr='%v'", cli.id, ioerr)
+							break readlines
+						}
+						tmpget--
+						get++
+						sentbytes += n
+						sock.logs.Info("SOCKET [cli=%d] modeGet state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val.(string))
+					} // end for keys
+					state = -2
+					mode = no_mode
+					keys = nil
+
+				case BEL:
+					state-- // reset state to read more keys
+				} // end switch line
+			} // end switch state
 
 		case modeDEL:
-			c.logs.Info("SOCKET modeDEL line='%#v'", line)
+			sock.logs.Info("SOCKET [cli=%d] modeDEL line='%#v'", cli.id, line)
+
+			switch state {
 			// TODO process multiple Del lines here.
+			case 0: // state 0 reads key
+				if len(line) > KEY_LIMIT {
+					cli.tp.PrintfLine(CAN)
+					break readlines
+				}
+				numBy-- // decrease counter
+				tmpdel++ // increase tmp counter, amount we have to del
+				keys = append(keys, line)
+				state++ // modeDEL state is 1 now
+				continue readlines
+
+			case 1: // modeDEL state 1 reads ETB or BEL
+				if len(line) != 1 {
+					cli.tp.PrintfLine(CAN)
+					break readlines
+				}
+				switch line {
+				case ETB:
+					delloopkeys:
+					for _, akey := range keys {
+						err := sock.db.Del(akey)
+						if err == nil {
+							sock.logs.Error("SOCKET [cli=%d] modeDEL state1 err='%v'", cli.id, err)
+							// reply with error
+							n, ioerr := io.WriteString(cli.conn, NUL+key+CRLF)
+							if ioerr != nil {
+								// could not send reply, peer disconnected?
+								sock.logs.Error("SOCKET [cli=%d] modeDEL state1 replyERR ioerr='%v'", cli.id, ioerr)
+								break readlines
+							}
+							sentbytes += n
+							continue delloopkeys
+						}
+						n, ioerr := io.WriteString(cli.conn, ACK+CRLF)
+						if ioerr != nil {
+							// could not send reply, peer disconnected?
+							sock.logs.Error("SOCKET [cli=%d] modeDEL state1 replyACK ioerr='%v'", cli.id, ioerr)
+							break readlines
+						}
+						tmpdel--
+						del++
+						sentbytes += n
+						sock.logs.Info("SOCKET [cli=%d] modeDEL state1 ETB k='%s'", cli.id, akey)
+					} // end for keys
+				case BEL:
+					state-- // reset state to read more keys
+				} // end switch line
+			} // end switch state
 
 		case no_mode:
+			// ENTER STATE MACHINE
 			keys = nil
 			if vals == nil {
 				vals = make(map[string]*string, 8)
@@ -391,21 +540,21 @@ readlines:
 			// len min: X|1  || 2nd is not '|' || line tooooooooooooooooo long
 			if len(line) < 3 || line[1] != '|' {
 				// invalid format
-				c.tp.PrintfLine(CAN)
+				cli.tp.PrintfLine(CAN)
 				break readlines
 			}
 			state = -1
 			// no mode is set: find command and set mode to accept reading of multiple lines
 			split := strings.Split(line, "|")[0:2]
 			if len(split) < 2 {
-				c.tp.PrintfLine(CAN)
+				cli.tp.PrintfLine(CAN)
 				break readlines
 			}
 			cmd = string(split[0])
 			//add, tmpadd = 0, 0
 			set, tmpset = 0, 0
-			//del, tmpdel = 0, 0
-			//get, tmpget = 0, 0
+			del, tmpdel = 0, 0
+			get, tmpget = 0, 0
 			switch cmd {
 
 			/*
@@ -475,36 +624,36 @@ readlines:
 				}
 				go func(runi int, waiti int) {
 					log.Printf("Lock MemProfile run=(%d sec) wait=(%d sec)", runi, waiti)
-					c.mem.Lock()
+					sock.mem.Lock()
 					log.Printf("StartMemProfile run=(%d sec) wait=(%d sec)", runi, waiti)
 					run := time.Duration(runi) * time.Second
 					wait := time.Duration(waiti) * time.Second
 					Prof.StartMemProfile(run, wait)
-					c.mem.Unlock()
+					sock.mem.Unlock()
 				}(runi, waiti)
-				c.tp.PrintfLine("200 StartMemProfile run=%d wait=%d", runi, waiti)
+				cli.tp.PrintfLine("200 StartMemProfile run=%d wait=%d", runi, waiti)
 
 			case Magic2:
 				// start/stop cpu profiling
 				if !socket {
 					break readlines
 				}
-				c.cpu.Lock()
-				if c.CPUfile != nil {
+				sock.cpu.Lock()
+				if sock.CPUfile != nil {
 					Prof.StopCPUProfile()
-					c.tp.PrintfLine("200 StopCPUProfile")
-					c.CPUfile = nil
+					cli.tp.PrintfLine("200 StopCPUProfile")
+					sock.CPUfile = nil
 				} else {
 					CPUfile, err := Prof.StartCPUProfile()
 					if err != nil || CPUfile == nil {
 						log.Printf("ERROR SOCKET StartCPUProfile err='%v'", err)
-						c.tp.PrintfLine("400 ERR StartCPUProfile")
+						cli.tp.PrintfLine("400 ERR StartCPUProfile")
 					} else {
-						c.CPUfile = CPUfile
-						c.tp.PrintfLine("200 StartCPUProfile")
+						sock.CPUfile = CPUfile
+						cli.tp.PrintfLine("200 StartCPUProfile")
 					}
 				}
-				c.cpu.Unlock()
+				sock.cpu.Unlock()
 
 			case MagicZ:
 				// quit
@@ -518,7 +667,8 @@ readlines:
 		} // end switch mode
 		continue readlines
 	} // end for readlines
-	log.Printf("handleConn LEFT: %#v", conn)
+
+	c.logs.Info("handleConn LEFT [cli=%d] conn rx=%d tx=%d", cli.id, recvbytes, sentbytes)
 } // end func handleConn
 
 func getRemoteIP(conn net.Conn) string {

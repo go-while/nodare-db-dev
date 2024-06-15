@@ -70,7 +70,7 @@ type Client struct {
 }
 
 func NewCliHandler(logs ilog.ILOG) (cli *CliHandler) {
-	log.Printf("Client.NewCliHandler")
+	logs.Debug("Client.NewCliHandler")
 	return &CliHandler{
 		logs: logs,
 		// Clients [0] is not used: we count ids from 1!
@@ -196,7 +196,7 @@ func (c *Client) CliConnect(client *Client) (*Client, error) {
 	}
 	c.logs.Info("client established c.sock='%v' c.http='%v' mode=%d", c.sock, c.http, c.Mode)
 	if c.tp != nil {
-		_, _, err := c.tp.ReadCodeLine(200) // server.ACK
+		_, _, err := c.tp.ReadCodeLine(200) // server.ACK welcome message
 		if err != nil {
 			c.logs.Error("c.tp.ReadCodeLine init err='%v'", err)
 			return nil, err
@@ -281,22 +281,33 @@ func (c *Client) SOCK_Set(key string, val string, resp *string) (err error) {
 	if err != nil {
 		return
 	}
-
 	c.logs.Debug("SOCK_Set k='%v' v='%v' wait ReadLine", key, val)
 	reply, err := c.tp.ReadLine()
 	if err != nil {
 		return
+	}
+	if len(reply) == 0 {
+		err = fmt.Errorf("SOCK_Set empty reply")
+		return
+	}
+	if string(reply[0]) != server.ACK {
+		c.logs.Error("SOCK_Set !reply.ACK k='%v' v='%v' reply='%#v'", key, val, reply)
 	}
 	c.logs.Debug("SOCK_Set k='%v' v='%v' got ReadLine reply='%#v'", key, val, reply)
 	*resp = reply
 	return
 } // end func SOCK_Set
 
-func (c *Client) SOCK_Get(key string, resp *string) (err error) {
+func (c *Client) SOCK_Get(key string, resp *string) (found bool, err error) {
 	if c.tp == nil {
 		err = fmt.Errorf("ERROR SOCK_Get c.tp nil")
 		return
 	}
+	c.logs.Debug("SOCK_Get key='%s'", key)
+
+	//	GET|1\r\n
+	// 		AveryLooongKey\r\n
+	//		\x17\r\n
 
 	request := server.MagicG+"|1"+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
 	_, err = io.WriteString(c.sock, request)
@@ -308,21 +319,36 @@ func (c *Client) SOCK_Get(key string, resp *string) (err error) {
 	if err != nil {
 		return
 	}
+	log.Printf("SOCK_GET key='%s' reply='%#v'", key, reply)
+
+	switch string(reply[0]) {
+		case server.NUL:
+		// not found
+		if nfk != nil && len(reply) > 1 {
+			// extract the not-found-key (only with multiple requests)
+			*nfk = string(reply[1:])
+			return
+		}
+	}
 
 	*resp = reply
 	return
 } // end func SOCK_Get
 
-func (c *Client) SOCK_Del(key string, resp *string) (err error) {
+func (c *Client) SOCK_Del(key string, resp *string, nfk *string) (err error) {
 	if c.tp == nil {
 		err = fmt.Errorf("ERROR SOCK_Get c.tp nil")
 		return
 	}
 
+	//	DEL|1\r\n
+	// 	AveryLooongKey\r\n
+	//	\x17\r\n
+
 	request := server.MagicD+"|1"+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
 	_, err = io.WriteString(c.sock, request)
 	if err != nil {
-		return err
+		return
 	}
 
 	reply, err := c.tp.ReadLine()

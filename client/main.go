@@ -37,9 +37,9 @@ func main() {
 	flag.StringVar(&sock, "sock", "", "uri to non-default socket (addr:port)")
 	flag.IntVar(&mode, "mode", 1, "mode=1=http(s) | mode=2=socket")
 	flag.BoolVar(&ssl, "ssl", false, "use secure connection")
-	flag.IntVar(&items, "items", 10000, "insert this many items per parallel worker")
+	flag.IntVar(&items, "items", 100000, "insert this many items per parallel worker")
 	flag.IntVar(&rounds, "rounds", 10, "test do N rounds")
-	flag.IntVar(&parallel, "parallel", 4, "limits parallel tests to N conns")
+	flag.IntVar(&parallel, "parallel", 8, "limits parallel tests to N conns")
 	flag.BoolVar(&runtest, "runtest", true, "runs the test after connecting")
 	flag.StringVar(&logfile, "logfile", "", "logfile for client")
 	flag.Parse()
@@ -89,7 +89,7 @@ func main() {
 	cliChan := make(chan *client.Client, parallel)
 	start := time.Now().Unix()
 
-	log.Printf("starting insert")
+	logs.Debug("starting insert")
 	// launch insert tests
 	for r := 1; r <= rounds; r++ {
 		time.Sleep(1 * time.Millisecond) // mini delay to have them spawn in order
@@ -99,19 +99,19 @@ func main() {
 			var netCli *client.Client
 			select {
 				case netCli = <- cliChan:
-					log.Printf("insert test: got open netCli")
+					logs.Info("insert test: got open netCli")
 					// pass
 				default:
 					// no conn in cliChan? establish new!
 					newnetCli, err := cliHandler.NewCli(clientOpts)
 					if newnetCli == nil || err != nil {
-						log.Printf("ERROR netCli='%v' err='%v'", newnetCli, err)
+						logs.Error("ERROR netCli='%v' err='%v'", newnetCli, err)
 						return
 					}
 					netCli = newnetCli
 			}
 			testmap := make(map[string]string)
-			log.Printf("Launch insert test round=%d/%d", r, rounds)
+			logs.Info("Launch insert test round=%d/%d", r, rounds)
 			var err error
 			var resp string
 			for i := 1; i <= items; i++ {
@@ -123,7 +123,8 @@ func main() {
 						// http mode
 						err = netCli.HTTP_Set(key, val, &resp)
 					case 2:
-						// sock mode // TODO! add test for SetMany
+						// sock mode
+						// TODO! add test for SetMany
 						err = netCli.SOCK_Set(key, val, &resp)
 				}
 				if err != nil {
@@ -131,7 +132,7 @@ func main() {
 				}
 				testmap[key] = val
 			}
-			log.Printf("OK insert test round=%d/%d set=%d", r, rounds, len(testmap))
+			logs.Info("OK insert test round=%d/%d set=%d", r, rounds, len(testmap))
 			cliChan <- netCli // return netCli
 			retchan <- testmap
 			<-parChan // returns lock parallel
@@ -139,24 +140,24 @@ func main() {
 		//^^ go func
 	} // end insert worker
 
-	log.Printf("wait for insert test to return maps to test K:V")
+	logs.Info("wait for insert test to return maps to test K:V")
 	var capturemaps []map[string]string
 forever:
 	for {
 		select {
 		case testmap := <-retchan:
 			capturemaps = append(capturemaps, testmap)
-			log.Printf("Got a testmap have=%d want=%d", len(capturemaps), rounds)
+			logs.Info("Got a testmap have=%d want=%d", len(capturemaps), rounds)
 		default:
 			if len(capturemaps) == rounds {
-				log.Printf("OK all testmaps returned, checking now...")
+				logs.Info("OK all testmaps returned, checking now...")
 				break forever
 			}
 			time.Sleep(time.Millisecond * 100)
 		}
 	} // end for wait capture testmaps
 	insert_end := time.Now().Unix()
-	log.Printf("insert finished: took %d sec! checking...", insert_end-start)
+	logs.Info("insert finished: took %d sec! checking...", insert_end-start)
 
 	// check all testmaps
 	retintChan := make(chan int, len(capturemaps))
@@ -171,16 +172,18 @@ forever:
 				switch netCli.Mode {
 					case 1:
 						// http mode
-						err = netCli.HTTP_Get(k, &val) // http Get Key: val is passed as pointer!
+						err = netCli.HTTP_Get(k, &val) // http Get Key: return val is passed as pointer!
 					case 2:
-						// sock mode // TODO! add test for GetMany
-						err = netCli.SOCK_Get(k, &val) // socket Get key: val is passed as pointer!
+						// sock mode
+						// TODO! add test for GetMany
+						var nfk string
+						err = netCli.SOCK_Get(k, &val, &nfk) // socket Get key: return val is passed as pointer!
 				}
 				if err != nil {
 					log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d", k, err, netCli.Mode)
 				}
 				if val != v {
-					log.Fatalf("ERROR verify k='%s' v='%s' != val='%s'", k, v, val)
+					log.Fatalf("ERROR verify k='%s' v='%s' != val='%#v' nfk='%s'", k, v, val, nfk)
 					os.Exit(1)
 				}
 				checked++
@@ -204,8 +207,8 @@ final:
 		}
 	}
 	test_end := time.Now().Unix()
-	log.Printf("\n test parallel=%d\n total=%d\n checked=%d\n items/round=%d\n rounds=%d\n insert took %d sec \n check took %d sec \n total %d sec", parallel, items*rounds, checked, items, rounds, insert_end-start, test_end-insert_end, test_end-start)
-	log.Printf("infinite wait on stop_chan")
+	logs.Info("Check done! Result {\n test parallel=%d\n total=%d\n checked=%d\n items/round=%d\n rounds=%d\n insert took %d sec \n check took %d sec \n total %d sec\n }", parallel, items*rounds, checked, items, rounds, insert_end-start, test_end-insert_end, test_end-start)
+	logs.Info("infinite wait on stop_chan")
 	<-stop_chan
 
 } // end func main:client/main.go

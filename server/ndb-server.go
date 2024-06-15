@@ -56,8 +56,8 @@ func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusNotAcceptable) // 406
 		return
 	}
-
-	val := srv.db.Get(key)
+	var val interface{}
+	srv.db.Get(key, &val)
 	if val == nil {
 		srv.logs.Info("not found key='%s'", key)
 		w.WriteHeader(http.StatusGone) // 410
