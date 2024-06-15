@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"github.com/go-while/nodare-db-dev/logger"
 	"net/http"
-	"time"
 	"sync"
+	"time"
 )
 
 type Server interface {
 	Start()
 	Stop()
-}
+} // end Server interface
 
 type HttpServer struct {
 	ndbServer  WebMux
@@ -21,8 +21,8 @@ type HttpServer struct {
 	cfg        VConfig
 	logs       ilog.ILOG
 	stop_chan  chan struct{}
-	wg sync.WaitGroup
-}
+	wg         sync.WaitGroup
+} // end struct HttpServer
 
 type HttpsServer struct {
 	ndbServer   WebMux
@@ -30,8 +30,8 @@ type HttpsServer struct {
 	cfg         VConfig
 	logs        ilog.ILOG
 	stop_chan   chan struct{}
-	wg sync.WaitGroup
-}
+	wg          sync.WaitGroup
+} // end struct HttpsServer
 
 func NewHttpServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup) (srv *HttpServer) {
 	srv = &HttpServer{
@@ -39,10 +39,10 @@ func NewHttpServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, stop_chan chan
 		logs:      logs,
 		cfg:       cfg,
 		stop_chan: stop_chan,
-		wg: wg,
+		wg:        wg,
 	}
 	return
-}
+} // end func NewHttpServer
 
 func NewHttpsServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup) (srv *HttpsServer) {
 	srv = &HttpsServer{
@@ -51,10 +51,10 @@ func NewHttpsServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, stop_chan cha
 		logs:      logs,
 		cfg:       cfg,
 		stop_chan: stop_chan,
-		wg: wg,
+		wg:        wg,
 	}
 	return
-}
+} // end func NewHttpsServer
 
 func (server *HttpServer) Start() {
 
@@ -65,8 +65,7 @@ func (server *HttpServer) Start() {
 		Addr:         fmt.Sprintf("%s:%s", server.cfg.GetString(VK_SERVER_HOST), server.cfg.GetString(VK_SERVER_PORT_TCP)),
 		Handler:      server.ndbServer.CreateMux(),
 	}
-	server.wg.Add(1)
-	defer server.wg.Done()
+
 	go func() {
 		server.wg.Add(1)
 		defer server.wg.Done()
@@ -76,11 +75,14 @@ func (server *HttpServer) Start() {
 		}
 		server.logs.Info("HttpServer: closing")
 	}()
-	<- server.stop_chan
+
+	server.wg.Add(1)
+	defer server.wg.Done()
+	stopnotify := <-server.stop_chan // waits for signal from main
 	server.Stop()
 	server.logs.Info("HttpServer: closed")
-	server.stop_chan <- struct{}{}
-}
+	server.stop_chan <- stopnotify // push back in to notify others
+} // end func httpServer interface Start()
 
 func (server *HttpServer) Stop() {
 	server.logs.Info("HttpServer: stopping")
@@ -90,7 +92,7 @@ func (server *HttpServer) Stop() {
 		server.logs.Fatal("HttpServer: shutdown error %v", err)
 	}
 	server.logs.Info("HttpServer: stopped")
-}
+} // end func httpServer interface Stop()
 
 func (server *HttpsServer) Start() {
 	server.httpsServer = &http.Server{
@@ -100,8 +102,7 @@ func (server *HttpsServer) Start() {
 		Addr:         fmt.Sprintf("%s:%s", server.cfg.GetString(VK_SERVER_HOST), server.cfg.GetString(VK_SERVER_PORT_TCP)),
 		Handler:      server.ndbServer.CreateMux(),
 	}
-	server.wg.Add(1)
-	defer server.wg.Done()
+
 	go func() {
 		server.wg.Add(1)
 		defer server.wg.Done()
@@ -112,11 +113,14 @@ func (server *HttpsServer) Start() {
 		}
 		server.logs.Info("HttpsServer: closing")
 	}()
-	<- server.stop_chan
+
+	server.wg.Add(1)
+	defer server.wg.Done()
+	stopnotify := <-server.stop_chan // waits for signal from main
 	server.Stop()
 	server.logs.Info("HttpsServer: closed")
-	server.stop_chan <- struct{}{}
-}
+	server.stop_chan <- stopnotify // push back in to notify others
+} // end func httpsServer interface Start()
 
 func (server *HttpsServer) Stop() {
 	server.logs.Info("HttpsServer: stopping")
@@ -126,4 +130,4 @@ func (server *HttpsServer) Stop() {
 		server.logs.Fatal("HttpsServer: shutdown error %v", err)
 	}
 	server.logs.Info("HttpsServer: stopped")
-}
+} // end func httpsServer interface Stop()

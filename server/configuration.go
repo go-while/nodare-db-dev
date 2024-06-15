@@ -253,4 +253,3 @@ func (c *ViperConfig) GetUint64(key string) uint64 {
 func (c *ViperConfig) IsSet(key string) bool {
 	return c.viper.IsSet(key)
 }
-

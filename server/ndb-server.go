@@ -11,7 +11,7 @@ import (
 const KEY_PARAM = "key"
 
 type WebMux interface {
-	CreateMux() (*mux.Router)
+	CreateMux() *mux.Router
 	HandlerGetValByKey(w http.ResponseWriter, r *http.Request)
 	HandlerSet(w http.ResponseWriter, r *http.Request)
 	HandlerDel(w http.ResponseWriter, r *http.Request)
@@ -29,7 +29,7 @@ func NewXNDBServer(db *database.XDatabase, logs ilog.ILOG) *XNDBServer {
 	}
 }
 
-func (srv *XNDBServer) CreateMux() (*mux.Router) {
+func (srv *XNDBServer) CreateMux() *mux.Router {
 	r := mux.NewRouter()
 	//r.HandleFunc("/jkv/{"+KEY_PARAM+"}", srv.HandlerGetJsonBlobByKey)
 	//r.HandleFunc("/jnv/{"+KEY_PARAM+"}", srv.HandlerGetJsonValByKey)

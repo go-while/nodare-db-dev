@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	INFO    = 0x1
-	WARN    = 0x2
-	DEBUG   = 0x3
+	INFO  = 0x1
+	WARN  = 0x2
+	DEBUG = 0x3
 	//MAXSIZE = 100 * 1024 * 1024 // 100 MB
 )
 

@@ -18,19 +18,19 @@ import (
 )
 
 type SOCKET struct {
-	stop_chan chan struct{}
-	wg sync.WaitGroup
-	mux     sync.Mutex
-	cpu     sync.Mutex
-	mem     sync.Mutex
-	CPUfile *os.File
-	logs    ilog.ILOG
-	socket  *os.File
-	socketPath string
+	stop_chan      chan struct{}
+	wg             sync.WaitGroup
+	mux            sync.Mutex
+	cpu            sync.Mutex
+	mem            sync.Mutex
+	CPUfile        *os.File
+	logs           ilog.ILOG
+	socket         *os.File
+	socketPath     string
 	socketlistener net.Listener
-	tcplistener net.Listener
-	tlslistener net.Listener
-	acl *AccessControlList
+	tcplistener    net.Listener
+	tlslistener    net.Listener
+	acl            *AccessControlList
 }
 
 var (
@@ -64,18 +64,18 @@ func NewSocketHandler(cfg VConfig, logs ilog.ILOG, stop_chan chan struct{}, wg s
 		}
 	}
 	sockets.Start(tcpListen, tlsListen, socketPath, tlscrt, tlskey, tlsenabled)
-	time.Sleep(time.Second/100)
+	time.Sleep(time.Second / 100)
 	return sockets
 }
 
 func (c *SOCKET) CloseSocket() {
 	c.wg.Add(1)
 	defer c.wg.Done()
-	<- c.stop_chan
-	c.stop_chan <- struct{}{}
+	stopnotify := <-c.stop_chan // waits for signal from main
 	c.socketlistener.Close()
 	os.Remove(c.socketPath)
 	c.logs.Debug("Socket closed")
+	c.stop_chan <- stopnotify // push back in to notify others
 }
 
 func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tlscrt string, tlskey string, tlsenabled bool) {
@@ -100,7 +100,7 @@ func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tl
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				if(errors.Is(err, net.ErrClosed)) {
+				if errors.Is(err, net.ErrClosed) {
 					c.logs.Info("Closing SOCKET")
 					return
 				}
@@ -129,7 +129,7 @@ func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tl
 			conn, err := listener.Accept()
 			raddr := getRemoteIP(conn)
 			if err != nil {
-				if(errors.Is(err, net.ErrClosed)) {
+				if errors.Is(err, net.ErrClosed) {
 					c.logs.Info("Closing TCP SOCKET")
 					return
 				}
@@ -173,7 +173,7 @@ func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tl
 			conn, err := listener_ssl.Accept()
 			raddr := getRemoteIP(conn)
 			if err != nil {
-				if(errors.Is(err, net.ErrClosed)) {
+				if errors.Is(err, net.ErrClosed) {
 					c.logs.Info("Closing TLS SOCKET")
 					return
 				}

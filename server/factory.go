@@ -24,7 +24,7 @@ func (f *Factory) NewNDBServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, st
 	logs.Info("factory: viper cfg loaded tls_enabled=%t logfile='%s'", tls_enabled, logfile)
 
 	NewSocketHandler(cfg, logs, stop_chan, wg)
-	time.Sleep(time.Second/10)
+	time.Sleep(time.Second / 10)
 
 	switch tls_enabled {
 	case false:
@@ -36,8 +36,6 @@ func (f *Factory) NewNDBServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, st
 		srv = NewHttpsServer(cfg, ndbServer, logs, stop_chan, wg)
 		logs.Debug("Factory TLS WEB\n  srv='%#v'\n^EOL\n\n cfg='%#v'\n^EOL loglevel=%d\n\n", cfg, srv, logs.GetLOGLEVEL())
 	}
-
-
 
 	return
 } // end func NewNDBServer

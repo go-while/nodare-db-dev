@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/dchest/siphash"
-	pcashash "github.com/go-while/nodare-db-dev/pcas_hash"
 	"github.com/go-while/nodare-db-dev/logger"
+	pcashash "github.com/go-while/nodare-db-dev/pcas_hash"
 	//"log"
 	"hash/fnv"
 	"math/rand"
@@ -36,8 +36,8 @@ type XDICK struct {
 	// mainmux is not used anywhere but exists
 	//  for whatever reason we may find
 	//   subdicks can lock XDICK
-	booted  int64 // timestamp
-	mainmux sync.RWMutex
+	booted   int64 // timestamp
+	mainmux  sync.RWMutex
 	SubDICKs []*SubDICK
 	SubCount uint32
 	logs     ilog.ILOG
@@ -56,7 +56,7 @@ type SubDICK struct {
 //
 // The function does not take any parameters.
 // It returns a pointer to XDICK.
-func NewXDICK(logs ilog.ILOG, sub_dicks uint32/*, suckDickCh chan uint32, returnsubDICKs chan []*SubDICK*/) *XDICK {
+func NewXDICK(logs ilog.ILOG, sub_dicks uint32 /*, suckDickCh chan uint32, returnsubDICKs chan []*SubDICK*/) *XDICK {
 	var mainmux sync.RWMutex
 	xdick := &XDICK{
 		pcas: pcashash.New(),

@@ -9,18 +9,17 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"syscall"
-	"time"
 	"sync"
+	"syscall"
 )
 
 const MODE = 1
 
 var (
-	wg sync.WaitGroup
-	flag_configfile   string
-	flag_logfile  string
-	flag_hashmode int
+	wg              sync.WaitGroup
+	flag_configfile string
+	flag_logfile    string
+	flag_hashmode   int
 
 	Prof *prof.Profiler
 	// setHASHER sets prefered hash algo
@@ -70,7 +69,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
-	stop_chan <- struct{}{}
+	stop_chan <- struct{}{} // force waiters to stop
 	wg.Wait()
 	logs.Info("Quit: %s", os.Args[0])
 } // end func main

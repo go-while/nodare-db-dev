@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"github.com/go-while/nodare-db-dev/client/clilib"
 	"log"
 	"os"
@@ -11,15 +11,15 @@ import (
 )
 
 var (
-	wg sync.WaitGroup
-	addr string
-	sock string
-	mode int // mode=1=http(s) || mode = 2 raw tcp (with tls)
-	ssl bool
-	items int
+	wg       sync.WaitGroup
+	addr     string
+	sock     string
+	mode     int // mode=1=http(s) || mode = 2 raw tcp (with tls)
+	ssl      bool
+	items    int
 	parallel int
-	rounds int
-	logfile string
+	rounds   int
+	logfile  string
 )
 
 func main() {
