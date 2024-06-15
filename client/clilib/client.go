@@ -298,7 +298,7 @@ func (c *Client) SOCK_Set(key string, val string, resp *string) (err error) {
 	return
 } // end func SOCK_Set
 
-func (c *Client) SOCK_Get(key string, resp *string) (found bool, err error) {
+func (c *Client) SOCK_Get(key string, resp *string, nfk *string) (found bool, err error) {
 	if c.tp == nil {
 		err = fmt.Errorf("ERROR SOCK_Get c.tp nil")
 		return
@@ -312,7 +312,7 @@ func (c *Client) SOCK_Get(key string, resp *string) (found bool, err error) {
 	request := server.MagicG+"|1"+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
 	_, err = io.WriteString(c.sock, request)
 	if err != nil {
-		return err
+		return
 	}
 
 	reply, err := c.tp.ReadLine()
@@ -354,6 +354,16 @@ func (c *Client) SOCK_Del(key string, resp *string, nfk *string) (err error) {
 	reply, err := c.tp.ReadLine()
 	if err != nil {
 		return
+	}
+
+	switch string(reply[0]) {
+		case server.NUL:
+		// not found
+		if nfk != nil && len(reply) > 1 {
+			// extract the not-found-key (only with multiple requests)
+			*nfk = string(reply[1:])
+			return
+		}
 	}
 
 	*resp = reply
