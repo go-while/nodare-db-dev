@@ -385,7 +385,7 @@ func Construct_SOCK_GetMany(key []string) {
 
 } // end func Construct_SOCK_GetMany
 
-func (c *Client) HTTP_Get(key string, val *string) (error) {
+func (c *Client) HTTP_Get(key string, val *string, found *bool) (error) {
 	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
 	resp, err := c.http.Get(c.url + "/get/" + key)
@@ -400,6 +400,7 @@ func (c *Client) HTTP_Get(key string, val *string) (error) {
 		return err
 	}
 	c.logs.Debug("c.http.Get resp='%#v'", resp)
+	*found = true
 	*val = string(body)
 	return nil
 } // end func HTTP_Get
