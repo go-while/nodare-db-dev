@@ -2,7 +2,6 @@
 package client
 
 import (
-	"flag"
 	"bytes"
 	"crypto/tls"
 	"fmt"
