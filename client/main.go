@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"flag"
 	"github.com/go-while/nodare-db-dev/client/clilib"
 	"log"
 	"os"
@@ -11,15 +12,28 @@ import (
 
 var (
 	wg sync.WaitGroup
+	addr string
+	sock string
+	mode int // mode=1=http(s) || mode = 2 raw tcp (with tls)
+	ssl bool
+	items int
+	parallel int
+	rounds int
 )
 
 func main() {
 	stopChan := make(chan struct{}, 1)
 	testWorker := true // runs a test after connecting
 	daemon := false
-	ssl := false
-	mode := 1 // http(s) || mode = 2 raw tcp (with tls)
-	addr := "localhost:2420"
+
+	flag.StringVar(&addr, "addr", "", "uri to non-default http(s) (addr:port)")
+	flag.StringVar(&sock, "sock", "", "uri to non-default socket (addr:port)")
+	flag.IntVar(&mode, "mode", 1, "mode=1=http(s) | mode=2=socket")
+	flag.BoolVar(&ssl, "ssl", false, "use secure connection")
+	flag.IntVar(&parallel, "workers", 4, "start N workers")
+	flag.IntVar(&items, "items", 100000, "insert this many items per parallel worker")
+	flag.IntVar(&rounds, "rounds", 10, "do N rounds:  distribute over workers")
+	flag.Parse()
 
 	netcli, err := client.NewClient(&client.Options{
 		SSL:        ssl,
@@ -34,10 +48,7 @@ func main() {
 		return
 	}
 	//log.Printf("netcli='%#v'", netcli)
-	parallel := 4
 
-	items := 100000
-	rounds := 10
 	parchan := make(chan struct{}, parallel)
 	retchan := make(chan map[string]string, 1)
 	log.Printf("starting insert")
