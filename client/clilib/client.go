@@ -303,7 +303,7 @@ func (c *Client) SOCK_Get(key string, resp *string, nfk *string, found *bool) (e
 		err = fmt.Errorf("ERROR SOCK_Get c.tp nil")
 		return
 	}
-	c.logs.Debug("SOCK_Get key='%s'", key)
+	//c.logs.Debug("SOCK_Get key='%s'", key)
 
 	//	GET|1\r\n
 	// 		AveryLooongKey\r\n
@@ -317,15 +317,15 @@ func (c *Client) SOCK_Get(key string, resp *string, nfk *string, found *bool) (e
 
 	reply, err := c.tp.ReadLine()
 	if err != nil {
-		log.Printf("SOCK_GET key='%s' ReadLine err='%#v'", key, err)
+		c.logs.Error("SOCK_GET key='%s' ReadLine err='%#v'", key, err)
 		return
 	}
-	log.Printf("SOCK_GET key='%s' reply='%#v'", key, reply)
+	//c.logs.Debug("SOCK_GET key='%s' reply='%#v'", key, reply)
 
 	switch string(reply[0]) {
 		case server.NUL:
 		*found = false
-		c.logs.Warn("SOCK_GET key='%s' NUL")
+		//c.logs.Debug("SOCK_GET key='%s' NUL")
 		// not found
 		if nfk != nil && len(reply) > 1 {
 			// extract the not-found-key (only with multiple requests)
@@ -400,7 +400,9 @@ func (c *Client) HTTP_Get(key string, val *string, found *bool) (error) {
 		return err
 	}
 	c.logs.Debug("c.http.Get resp='%#v'", resp)
-	*found = true
+	if len(body) > 0 {
+		*found = true
+	}
 	*val = string(body)
 	return nil
 } // end func HTTP_Get
