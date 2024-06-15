@@ -33,9 +33,10 @@ func (srv *XNDBServer) CreateMux() (*mux.Router) {
 	r := mux.NewRouter()
 	//r.HandleFunc("/jkv/{"+KEY_PARAM+"}", srv.HandlerGetJsonBlobByKey)
 	//r.HandleFunc("/jnv/{"+KEY_PARAM+"}", srv.HandlerGetJsonValByKey)
+	//r.HandleFunc("/zip/{"+KEY_PARAM+"}", srv.HandlerCompress)
 	r.HandleFunc("/get/{"+KEY_PARAM+"}", srv.HandlerGetValByKey)
-	r.HandleFunc("/set", srv.HandlerSet)
 	r.HandleFunc("/del/{"+KEY_PARAM+"}", srv.HandlerDel)
+	r.HandleFunc("/set", srv.HandlerSet)
 	return r
 }
 

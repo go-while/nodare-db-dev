@@ -22,7 +22,7 @@ const DefaultAddrSSL = "localhost:2420"
 const DefaultAddrTCPsocket = "localhost:3420"
 const DefaultAddrTLSsocket = "localhost:4420"
 
-const DefaultConnectTimeout = time.Duration(9 * time.Second)
+const DefaultClientConnectTimeout = time.Duration(9 * time.Second)
 const DefaultRequestTimeout = time.Duration(9 * time.Second)
 const DefaultIdleCliTimeout = time.Duration(60 * time.Second)
 
@@ -93,14 +93,14 @@ func NewClient(opts *Options) (*Client, error) {
 		testWorker: opts.TestWorker,
 		stop:       opts.Stop,
 	}
-	return client.Connect(client)
+	return client.ClientConnect(client)
 }
 
-func (c *Client) Connect(client *Client) (*Client, error) {
+func (c *Client) ClientConnect(client *Client) (*Client, error) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	if c.conn != nil || c.http != nil {
-		// conn is established, return no error
+		// conn is established, return no error.
 		c.logger.Warn("connection already established!?")
 		return client, nil
 	}
@@ -132,7 +132,7 @@ func (c *Client) Connect(client *Client) (*Client, error) {
 			c.logger.Info("client connecting to tls://'%s'", c.addr)
 			conn, err := tls.Dial("tcp", c.addr, conf)
 			if err != nil {
-				c.logger.Error("client.Connect tls.Dial err='%v'", err)
+				c.logger.Error("client.ClientConnect tls.Dial err='%v'", err)
 				return nil, err
 			}
 			c.conn = conn
@@ -145,7 +145,7 @@ func (c *Client) Connect(client *Client) (*Client, error) {
 			c.logger.Info("client connecting to tcp://'%s'", c.addr)
 			conn, err := net.Dial("tcp", c.addr)
 			if err != nil {
-				c.logger.Error("client.Connect net.Dial err='%v'", err)
+				c.logger.Error("client net.Dial err='%v'", err)
 				return nil, err
 			}
 			c.conn = conn
@@ -190,7 +190,7 @@ func (c *Client) Transport() {
 	log.Printf("Transport c.http='%v' c.url='%s'", c.http, c.url)
 }
 
-func (c *Client) Get(key string) (string, error) {
+func (c *Client) HTTPGet(key string) (string, error) {
 	c.mux.Lock() // we lock so nobody else can use the connection at the same time
 	defer c.mux.Unlock()
 	resp, err := c.http.Get(c.url + "/get/" + key)
@@ -208,7 +208,7 @@ func (c *Client) Get(key string) (string, error) {
 	return string(body), nil
 }
 
-func (c *Client) Set(key string, value string) (string, error) {
+func (c *Client) HTTPSet(key string, value string) (string, error) {
 	c.mux.Lock() // we lock so nobody else can use the connection at the same time
 	defer c.mux.Unlock()
 	if c.http == nil {
@@ -230,7 +230,7 @@ func (c *Client) Set(key string, value string) (string, error) {
 	return string(body), nil
 }
 
-func (c *Client) Del(key string) (string, error) {
+func (c *Client) HTTPDel(key string) (string, error) {
 	c.mux.Lock() // we lock so nobody else can use the connection at the same time
 	defer c.mux.Unlock()
 	resp, err := c.http.Get(c.url + "/del/" + key)

@@ -7,11 +7,17 @@ import (
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/server"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+	"sync"
 )
 
 const MODE = 1
 
 var (
+	wg sync.WaitGroup
 	flag_configfile   string
 	flag_logfile  string
 	flag_hashmode int
@@ -21,9 +27,11 @@ var (
 	// [ HASH_siphash | HASH_FNV32A | HASH_FNV64A ]
 	// TODO config value HASHER
 	setHASHER = database.HASH_FNV64A
+	stop_chan chan struct{}
 )
 
 func main() {
+	stop_chan = make(chan struct{}, 1)
 	Prof = prof.NewProf()
 	server.Prof = Prof
 
@@ -40,29 +48,29 @@ func main() {
 
 	switch MODE {
 	case 0:
+		// spaceholder
 
 	case 1:
 		db := database.NewDICK(logs, sub_dicks)
 		if database.HASHER == database.HASH_siphash {
 			db.XDICK.GenerateSALT()
 		}
-		srv := server.NewFactory().NewNDBServer(cfg, server.NewXNDBServer(db, logs), logs)
-		logs.Debug("Mode 1: Loaded vcfg='%#v'", cfg)
-		//suckDickCh <- sub_dicks // read sub_dicks from config, pass to suckDickCh so we can create subDICKs
-		logs.Debug("Mode 1: Created DB sub_dicks=%d", sub_dicks)
-		//<-waitCh
-		logs.Debug("Mode 1: Booted sub_dicks=%d srv='%v'", sub_dicks, srv)
-		//host := vcfg.GetString(VK_SERVER_HOST)
-		//log.Printf("MAIN Debug host='%v'", host)
-		//log.Printf("MAIN Debug srv='%#v'", srv)
+		srv := server.NewFactory().NewNDBServer(cfg, server.NewXNDBServer(db, logs), logs, stop_chan, wg)
+
 		if logs.IfDebug() {
+			logs.Debug("Mode 1: Loaded vcfg='%#v' host='%v'", cfg, cfg.GetString(server.VK_SERVER_HOST))
+			logs.Debug("Mode 1: Booted DB sub_dicks=%d srv='%v'", sub_dicks, srv)
 			logs.Debug("launching PprofWeb @ :1234")
 			go Prof.PprofWeb(":1234")
 		}
-		srv.Start()
-		srv.Stop()
+		go srv.Start()
 	default:
 		log.Fatalf("Invalid MODE=%d", MODE)
 	}
-
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+	stop_chan <- struct{}{}
+	wg.Wait()
+	logs.Info("Quit: %s", os.Args[0])
 } // end func main

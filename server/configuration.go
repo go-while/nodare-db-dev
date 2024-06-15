@@ -3,7 +3,6 @@ package server
 import (
 	"errors"
 	"fmt"
-
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/utils"
 	"github.com/spf13/viper"
@@ -30,7 +29,11 @@ type ViperConfig struct {
 	mapsEnvsToConfig map[string]string
 }
 
-//var mapsEnvsToConfig map[string]string = make(map[string]string)
+var (
+	RTO int //	ReadTimeout:  time.Duration(RTO) * time.Second,
+	WTO int //	WriteTimeout: time.Duration(WTO) * time.Second,
+	ITO int // 	IdleTimeout:  time.Duration(ITO) * time.Second,
+)
 
 func (c *ViperConfig) checkFileExists(filePath string) bool {
 	_, error := os.Stat(filePath)
@@ -87,6 +90,7 @@ func (c *ViperConfig) createDefaultConfigFile(cfgFile string) {
 	c.viper.SetDefault(VK_SERVER_SOCKET_PATH, DEFAULT_SERVER_SOCKET_PATH)
 	c.viper.SetDefault(VK_SERVER_SOCKET_PORT_TCP, DEFAULT_SERVER_SOCKET_TCP_PORT)
 	c.viper.SetDefault(VK_SERVER_SOCKET_PORT_TLS, DEFAULT_SERVER_SOCKET_TLS_PORT)
+	c.viper.SetDefault(VK_SERVER_SOCKET_ACL, V_DEFAULT_SERVER_SOCKET_ACL)
 
 	log.Printf("WriteConfigAs %s", cfgFile)
 	if c.logs.IfDebug() {
@@ -121,10 +125,11 @@ func (c *ViperConfig) mapEnvsToConf() {
 
 	c.mapsEnvsToConfig[VK_SERVER_HOST] = "NDB_HOST"
 	c.mapsEnvsToConfig[VK_SERVER_PORT_TCP] = "NDB_PORT"
-	c.mapsEnvsToConfig[VK_SERVER_PORT_UDP] = "DEFAULT_SERVER_UDP_PORT"
-	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PATH] = "DEFAULT_SERVER_SOCKET_PATH"
-	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TCP] = "DEFAULT_SERVER_SOCKET_TCP_PORT"
-	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TLS] = "DEFAULT_SERVER_SOCKET_TLS_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_PORT_UDP] = "SERVER_UDP_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PATH] = "SERVER_SOCKET_PATH"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TCP] = "SERVER_SOCKET_TCP_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TLS] = "SERVER_SOCKET_TLS_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_ACL] = "SERVER_SOCKET_ACL"
 
 }
 
@@ -164,6 +169,9 @@ func (c *ViperConfig) initDB() (sub_dicks uint32) {
 			return
 		}
 	}
+	RTO = c.viper.GetInt(VK_NET_WEBSRV_READ_TIMEOUT)
+	WTO = c.viper.GetInt(VK_NET_WEBSRV_WRITE_TIMEOUT)
+	ITO = c.viper.GetInt(VK_NET_WEBSRV_IDLE_TIMEOUT)
 	// reached here we did not get a valid sub_dicks value from config
 	// always return at least 10 so we don't fail
 	log.Printf("WARN invalid sub_dicks value=%d !! defaulted to 1000", setSUBDICKS)
@@ -245,3 +253,4 @@ func (c *ViperConfig) GetUint64(key string) uint64 {
 func (c *ViperConfig) IsSet(key string) bool {
 	return c.viper.IsSet(key)
 }
+

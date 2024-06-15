@@ -7,7 +7,7 @@ import (
 
 var AVAIL_SUBDICKS = []uint32{10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 2000000000, 4000000000}
 
-const DEFAULT_SUB_DICKS = 100
+const DEFAULT_SUB_DICKS = 1000
 
 const DEFAULT_PW_LEN = 32 // admin/username:password
 const DEFAULT_SUPERADMIN = "superadmin"
@@ -87,7 +87,7 @@ const V_DEFAULT_TLS_ENABLED = false
 const V_DEFAULT_NET_WEBSRV_READ_TIMEOUT = 5
 const V_DEFAULT_NET_WEBSRV_WRITE_TIMEOUT = 10
 const V_DEFAULT_NET_WEBSRV_IDLE_TIMEOUT = 120
-
+const V_DEFAULT_SERVER_SOCKET_ACL = "127.0.0.1,::1"
 // VIPER CONFIG KEYS
 const VK_ACCESS_SUPERADMIN_USER = "server.superadmin_user"
 const VK_ACCESS_SUPERADMIN_PASS = "server.superadmin_pass"
@@ -114,5 +114,6 @@ const VK_SERVER_PORT_UDP = "server.port_udp"
 const VK_SERVER_SOCKET_PATH = "server.socket_path"
 const VK_SERVER_SOCKET_PORT_TCP = "server.socket_tcpport"
 const VK_SERVER_SOCKET_PORT_TLS = "server.socket_tlsport"
+const VK_SERVER_SOCKET_ACL = "server.socket_acl"
 
 var Prof *prof.Profiler

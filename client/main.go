@@ -23,7 +23,7 @@ var (
 )
 
 func main() {
-	stopChan := make(chan struct{}, 1)
+	stop_chan := make(chan struct{}, 1)
 	testWorker := true // runs a test after connecting
 	daemon := false
 
@@ -41,7 +41,7 @@ func main() {
 		SSL:        ssl,
 		Addr:       addr,
 		Mode:       mode,
-		Stop:       stopChan,
+		Stop:       stop_chan,
 		Daemon:     daemon,
 		TestWorker: testWorker,
 	})
@@ -135,6 +135,6 @@ final:
 
 	log.Printf("\n test parallel=%d total=%d/%d \n items/round=%d rounds=%d\n insert took %d sec \n check took %d sec \n total %d sec", parallel, checked, items*rounds, items, rounds, insert_end-start, test_end-insert_end, test_end-start)
 
-	log.Printf("infinite wait on stopChan")
-	<-stopChan
+	log.Printf("infinite wait on stop_chan")
+	<-stop_chan
 }

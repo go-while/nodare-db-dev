@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/utils"
@@ -12,56 +13,99 @@ import (
 	"strings"
 	"sync"
 	"time"
+	//"os/signal"
+	//"syscall"
 )
 
 type SOCKET struct {
+	stop_chan chan struct{}
+	wg sync.WaitGroup
 	mux     sync.Mutex
 	cpu     sync.Mutex
 	mem     sync.Mutex
 	CPUfile *os.File
 	logs    ilog.ILOG
+	socket  *os.File
+	socketPath string
+	socketlistener net.Listener
+	tcplistener net.Listener
+	tlslistener net.Listener
+	acl *AccessControlList
 }
 
 var (
-	ACL        AccessControlList
 	DefaultACL map[string]bool // can be set before booting
 )
 
-func NewSocketHandler(vcfg VConfig) *SOCKET {
-	sockets := &SOCKET{}
-	log.Printf("NewSocketHandler vcfg='%#v'", vcfg)
-	host := vcfg.GetString(VK_SERVER_HOST)
-	tcpport := vcfg.GetString(VK_SERVER_SOCKET_PORT_TCP)
-	tlsport := vcfg.GetString(VK_SERVER_SOCKET_PORT_TLS)
-	socketPath := vcfg.GetString(VK_SERVER_SOCKET_PATH)
+func NewSocketHandler(cfg VConfig, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup) *SOCKET {
+	sockets := &SOCKET{
+		logs: logs,
+	}
+	logs.Debug("NewSocketHandler cfg='%#v'", cfg)
+	sockets.stop_chan = stop_chan
+	sockets.wg = wg
+	host := cfg.GetString(VK_SERVER_HOST)
+	tcpport := cfg.GetString(VK_SERVER_SOCKET_PORT_TCP)
+	tlsport := cfg.GetString(VK_SERVER_SOCKET_PORT_TLS)
+	socketPath := cfg.GetString(VK_SERVER_SOCKET_PATH)
 	tcpListen := host + ":" + tcpport
 	tlsListen := host + ":" + tlsport
-	tlscrt := vcfg.GetString(VK_SEC_TLS_PUBCERT)
-	tlskey := vcfg.GetString(VK_SEC_TLS_PRIVKEY)
-	tlsenabled := vcfg.GetBool(VK_SEC_TLS_ENABLED)
+	tlscrt := cfg.GetString(VK_SEC_TLS_PUBCERT)
+	tlskey := cfg.GetString(VK_SEC_TLS_PRIVKEY)
+	tlsenabled := cfg.GetBool(VK_SEC_TLS_ENABLED)
+
+	// setup acl
+	sockets.acl = NewACL()
+	iplist := cfg.GetString(VK_SERVER_SOCKET_ACL)
+	if iplist != "" {
+		ips := strings.Split(iplist, ",")
+		for _, ip := range ips {
+			sockets.acl.SetACL(ip, true)
+		}
+	}
 	sockets.Start(tcpListen, tlsListen, socketPath, tlscrt, tlskey, tlsenabled)
+	time.Sleep(time.Second/100)
 	return sockets
+}
+
+func (c *SOCKET) CloseSocket() {
+	c.wg.Add(1)
+	defer c.wg.Done()
+	<- c.stop_chan
+	c.stop_chan <- struct{}{}
+	c.socketlistener.Close()
+	os.Remove(c.socketPath)
+	c.logs.Debug("Socket closed")
 }
 
 func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tlscrt string, tlskey string, tlsenabled bool) {
 	// socket listener
 	go func(socketPath string) {
+		c.wg.Add(1)
+		defer c.wg.Done()
 		if socketPath == "" {
 			return
 		}
+		c.wg.Add(1)
+		defer c.wg.Done()
 		listener, err := net.Listen("unix", socketPath)
 		if err != nil {
-			log.Printf("ERROR SOCKET  creating socket err='%v'", err)
+			log.Fatalf("ERROR SOCKET err='%v'", err)
 			return
 		}
-		log.Printf("SOCKET Unix: %s", socketPath)
-		defer listener.Close()
-		defer os.Remove(socketPath)
+		c.logs.Info("SOCKET Path: %s", socketPath)
+		c.socketPath = socketPath
+		c.socketlistener = listener
+		go c.CloseSocket()
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				log.Printf("ERROR SOCKET accepting socket err='%v'", err)
-				return
+				if(errors.Is(err, net.ErrClosed)) {
+					c.logs.Info("Closing SOCKET")
+					return
+				}
+				c.logs.Warn("SOCKET err='%v'", err)
+				continue
 			}
 			go c.handleSocketConn(conn, "", true)
 		}
@@ -72,27 +116,32 @@ func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tl
 		if tcpListen == "" {
 			return
 		}
-		ACL.SetupACL()
+		c.wg.Add(1)
+		defer c.wg.Done()
 		listener, err := net.Listen("tcp", tcpListen)
 		if err != nil {
-			log.Printf("ERROR SOCKET creating tcpListen err='%v'", err)
+			log.Fatalf("ERROR SOCKET creating tcpListen err='%v'", err)
 			return
 		}
-		log.Printf("SOCKET ListenTCP: %s", tcpListen)
+		c.logs.Info("SOCKET TCP: %s", tcpListen)
 		defer listener.Close()
 		for {
 			conn, err := listener.Accept()
 			raddr := getRemoteIP(conn)
 			if err != nil {
-				log.Printf("ERROR SOCKET  accepting tcp err='%v'", err)
-				return
+				if(errors.Is(err, net.ErrClosed)) {
+					c.logs.Info("Closing TCP SOCKET")
+					return
+				}
+				c.logs.Warn("ERROR SOCKET accepting tcp err='%v'", err)
+				continue
 			}
-			if !checkACL(conn) {
-				log.Printf("SOCKET !ACL: '%s'", raddr)
+			if !c.acl.checkACL(conn) {
+				log.Printf("TCP SOCKET !ACL: '%s'", raddr)
 				conn.Close()
 				continue
 			}
-			log.Printf("SOCKET TCP newC: '%s'", raddr)
+			log.Printf("TCP SOCKET newConn: '%s'", raddr)
 			go c.handleSocketConn(conn, raddr, false)
 		}
 	}(tcpListen)
@@ -102,37 +151,41 @@ func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tl
 		if tlsListen == "" || !tlsenabled {
 			return
 		}
-		ACL.SetupACL()
 		certs, err := tls.LoadX509KeyPair(tlscrt, tlskey)
 		if err != nil {
-			log.Printf("ERROR tls.LoadX509KeyPair err='%v'", err)
-			os.Exit(1)
+			log.Fatalf("ERROR tls.LoadX509KeyPair err='%v'", err)
 		}
 		ssl_conf := &tls.Config{
 			Certificates: []tls.Certificate{certs},
 			//MinVersion: tls.VersionTLS12,
 			//MaxVersion: tls.VersionTLS13,
 		}
+		c.wg.Add(1)
+		defer c.wg.Done()
 		listener_ssl, err := tls.Listen("tcp", tlsListen, ssl_conf)
 		if err != nil {
-			log.Printf("ERROR SOCKET tls.Listen err='%v'", err)
+			log.Fatalf("ERROR SOCKET tls.Listen err='%v'", err)
 			return
 		}
 		defer listener_ssl.Close()
-		log.Printf("SOCKET tls.Listen: %s", tlsListen)
+		c.logs.Info("SOCKET TLS: %s", tlsListen)
 		for {
 			conn, err := listener_ssl.Accept()
 			raddr := getRemoteIP(conn)
 			if err != nil {
-				log.Printf("ERROR SOCKET accepting tcp err='%v'", err)
-				return
+				if(errors.Is(err, net.ErrClosed)) {
+					c.logs.Info("Closing TLS SOCKET")
+					return
+				}
+				c.logs.Warn("ERROR TLS SOCKET accepting tcp err='%v'", err)
+				continue
 			}
-			if !checkACL(conn) {
-				log.Printf("SOCKET !ACL: '%s'", raddr)
+			if !c.acl.checkACL(conn) {
+				log.Printf("SOCKET TLS !ACL: '%s'", raddr)
 				conn.Close()
 				continue
 			}
-			log.Printf("SOCKET TLS newC: '%s'", raddr)
+			log.Printf("SOCKET TLS newConn: '%s'", raddr)
 			go c.handleSocketConn(conn, raddr, false)
 		}
 	}(tlsListen, tlscrt, tlskey, tlsenabled)
@@ -170,12 +223,11 @@ readlines:
 			break readlines
 		}
 		// clients sends: CMD|num_of_lines\r\n
-		// followed by multiple lines
+		// followed by multiple lines with BEL byte \x07 as delim of k:v pairs
 		// with a single line containing a ETB \x17 when done:
-		// ...data\r\n\x17\r\n or CR LF ETB CR LF after last line of data!
+		// ...data\r\n\x17\r\n or CR LF ETB CR LF after last byte of data!
 		// any values (or keys?!) aka lines containing \r\n only
 		// must be escaped by client before sending and unescape after retrieval!
-		// clients must avoid sending of unexpected ETB or BEL bytes
 		//
 		// server replies on order of sending
 
@@ -240,7 +292,7 @@ readlines:
 					break readlines
 				}
 				v = line
-				numBy -= len(line)
+				numBy--
 
 				// TODO!
 				// got a k,v pair!
@@ -288,16 +340,15 @@ readlines:
 			// 		or run,wait for MemProfile
 			// len min: X|1  || 2nd is not '|' || line tooooooooooooooooo long
 			if len(line) < 3 || line[1] != '|' {
-				tp.PrintfLine("500 FMT")
-
 				// invalid format
+				tp.PrintfLine(CAN)
 				break readlines
 			}
 			state = -1
 			// no mode is set: find command and set mode to accept reading of multiple lines
 			split := strings.Split(line, "|")[0:2]
 			if len(split) < 2 {
-				tp.PrintfLine("500 ERS")
+				tp.PrintfLine(CAN)
 				break readlines
 			}
 			cmd = string(split[0])
@@ -422,8 +473,8 @@ func getRemoteIP(conn net.Conn) string {
 	return "x"
 }
 
-func checkACL(conn net.Conn) bool {
-	return ACL.IsAllowed(getRemoteIP(conn))
+func (a *AccessControlList) checkACL(conn net.Conn) bool {
+	return a.IsAllowed(getRemoteIP(conn))
 }
 
 type AccessControlList struct {
