@@ -35,7 +35,7 @@ func main() {
 	flag.BoolVar(&daemon, "daemon", false, "launch workers in background")
 	flag.StringVar(&addr, "addr", "", "uri to non-default http(s) (addr:port)")
 	flag.StringVar(&sock, "sock", "", "uri to non-default socket (addr:port)")
-	flag.IntVar(&mode, "mode", 1, "mode=1=http(s) | mode=2=socket")
+	flag.IntVar(&mode, "mode", 2, "mode=1=http(s) | mode=2=socket")
 	flag.BoolVar(&ssl, "ssl", false, "use secure connection")
 	flag.IntVar(&items, "items", 100000, "insert this many items per parallel worker")
 	flag.IntVar(&rounds, "rounds", 10, "test do N rounds")
@@ -176,7 +176,7 @@ forever:
 				switch netCli.Mode {
 					case 1:
 						// http mode
-						err = netCli.HTTP_Get(k, &val) // http Get Key: return val is passed as pointer!
+						err = netCli.HTTP_Get(k, &val, &found) // http Get Key: return val is passed as pointer!
 					case 2:
 						// sock mode
 						// TODO! add test for GetMany
@@ -185,7 +185,7 @@ forever:
 				if err != nil {
 					log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", k, err, netCli.Mode, nfk, found)
 				}
-				if found == false || val != v {
+				if !found || val != v {
 					log.Fatalf("ERROR verify k='%s' v='%s' != val='%s' nfk='%s' found=%t", k, v, val, nfk, found)
 					os.Exit(1)
 				}
