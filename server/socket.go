@@ -156,11 +156,11 @@ func (sock *SOCKET) Start(tcpListen string, tlsListen string, socketPath string,
 				continue
 			}
 			if !sock.acl.checkACL(conn) {
-				log.Printf("TCP SOCKET !ACL: '%s'", raddr)
+				sock.logs.Info("TCP SOCKET !ACL: '%s'", raddr)
 				conn.Close()
 				continue
 			}
-			log.Printf("TCP SOCKET newConn: '%s'", raddr)
+			sock.logs.Info("TCP SOCKET newConn: '%s'", raddr)
 			sock.mux.Lock()
 			sock.id++
 			sock.mux.Unlock()
@@ -207,11 +207,11 @@ func (sock *SOCKET) Start(tcpListen string, tlsListen string, socketPath string,
 				continue
 			}
 			if !sock.acl.checkACL(conn) {
-				log.Printf("SOCKET TLS !ACL: '%s'", raddr)
+				sock.logs.Info("SOCKET TLS !ACL: '%s'", raddr)
 				conn.Close()
 				continue
 			}
-			log.Printf("SOCKET TLS newConn: '%s'", raddr)
+			sock.logs.Info("SOCKET TLS newConn: '%s'", raddr)
 			sock.mux.Lock()
 			sock.id++
 			sock.mux.Unlock()
@@ -255,7 +255,7 @@ readlines:
 	for {
 		line, err := cli.tp.ReadLine()
 		if err != nil {
-			log.Printf("Error [cli=%d] handleConn err='%v'", cli.id, err)
+			sock.logs.Info("Error [cli=%d] handleConn err='%v'", cli.id, err)
 			break readlines
 		}
 		recvbytes += len(line)
@@ -316,11 +316,11 @@ readlines:
 
 		switch mode {
 		case modeADD:
-			log.Printf("SOCKET [cli=%d] modeADD line='%#v'", cli.id, line)
+			sock.logs.Debug("SOCKET [cli=%d] modeADD line='%#v'", cli.id, line)
 			// TODO process multiple Add lines here.
 
 		case modeSET:
-			log.Printf("SOCKE [cli=%d] modeSET line='%#v'", cli.id, line)
+			sock.logs.Debug("SOCKE [cli=%d] modeSET line='%#v'", cli.id, line)
 			// TODO process multiple Set lines here.
 
 			// receive first line with key at state 0
@@ -352,7 +352,7 @@ readlines:
 				keys = append(keys, key)
 				vals[key] = &line
 
-				log.Printf("SOCKET [cli=%d] modeSet state1 recv k='%s' v='%s' keys=%d vals=%d", cli.id, key, line, len(keys), len(vals))
+				sock.logs.Debug("SOCKET [cli=%d] modeSet state1 recv k='%s' v='%s' keys=%d vals=%d", cli.id, key, line, len(keys), len(vals))
 				key = ""
 				state++ // modeSET state is 2 now
 				continue readlines
@@ -365,7 +365,7 @@ readlines:
 
 				switch line {
 				case ETB:
-					log.Printf("SOCKET [cli=%d] modeSet state2 got ETB", cli.id)
+					sock.logs.Debug("SOCKET [cli=%d] modeSet state2 got ETB", cli.id)
 					// client finished streaming
 					// set key:val pairs
 					setloopkeys:
@@ -386,11 +386,11 @@ readlines:
 						}
 						tmpset--
 						set++
-						sock.logs.Info("SOCKET [cli=%d] state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
+						sock.logs.Debug("SOCKET [cli=%d] state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
 					} // end for keys
 
 					// reply single ACK
-					sock.logs.Info("SOCKET [cli=%d] state2 reply ACK", cli.id)
+					sock.logs.Debug("SOCKET [cli=%d] state2 reply ACK", cli.id)
 					n, ioerr := io.WriteString(cli.conn, ACK+CRLF)
 					if ioerr != nil {
 						sock.logs.Error("SOCKET [cli=%d] modeSet state2 reply ioerr='%v'", cli.id, ioerr)
@@ -404,14 +404,14 @@ readlines:
 					continue readlines
 
 				case BEL:
-					sock.logs.Info("SOCKET [cli=%d] modeSet state2 got BEL", cli.id)
+					sock.logs.Debug("SOCKET [cli=%d] modeSet state2 got BEL", cli.id)
 					// client continues sending k,v pairs
 					continue readlines
 				}
 			}
 
 		case modeGET:
-			sock.logs.Info("SOCKET [cli=%d] modeGET line='%#v'", cli.id, line)
+			sock.logs.Debug("SOCKET [cli=%d] modeGET line='%#v'", cli.id, line)
 			// TODO process multiple Get lines here.
 			switch state {
 
@@ -463,7 +463,7 @@ readlines:
 						tmpget--
 						get++
 						sentbytes += n
-						sock.logs.Info("SOCKET [cli=%d] modeGet state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val.(string))
+						sock.logs.Debug("SOCKET [cli=%d] modeGet state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val.(string))
 					} // end for keys
 					state = -2
 					mode = no_mode
@@ -475,7 +475,7 @@ readlines:
 			} // end switch state
 
 		case modeDEL:
-			sock.logs.Info("SOCKET [cli=%d] modeDEL line='%#v'", cli.id, line)
+			sock.logs.Debug("SOCKET [cli=%d] modeDEL line='%#v'", cli.id, line)
 
 			switch state {
 			// TODO process multiple Del lines here.
@@ -521,7 +521,7 @@ readlines:
 						tmpdel--
 						del++
 						sentbytes += n
-						sock.logs.Info("SOCKET [cli=%d] modeDEL state1 ETB k='%s'", cli.id, akey)
+						sock.logs.Debug("SOCKET [cli=%d] modeDEL state1 ETB k='%s'", cli.id, akey)
 					} // end for keys
 				case BEL:
 					state-- // reset state to read more keys
@@ -623,9 +623,9 @@ readlines:
 					}
 				}
 				go func(runi int, waiti int) {
-					log.Printf("Lock MemProfile run=(%d sec) wait=(%d sec)", runi, waiti)
+					sock.logs.Info("Lock MemProfile run=(%d sec) wait=(%d sec)", runi, waiti)
 					sock.mem.Lock()
-					log.Printf("StartMemProfile run=(%d sec) wait=(%d sec)", runi, waiti)
+					sock.logs.Info("StartMemProfile run=(%d sec) wait=(%d sec)", runi, waiti)
 					run := time.Duration(runi) * time.Second
 					wait := time.Duration(waiti) * time.Second
 					Prof.StartMemProfile(run, wait)
@@ -646,7 +646,7 @@ readlines:
 				} else {
 					CPUfile, err := Prof.StartCPUProfile()
 					if err != nil || CPUfile == nil {
-						log.Printf("ERROR SOCKET StartCPUProfile err='%v'", err)
+						sock.logs.Info("ERROR SOCKET StartCPUProfile err='%v'", err)
 						cli.tp.PrintfLine("400 ERR StartCPUProfile")
 					} else {
 						sock.CPUfile = CPUfile
