@@ -330,8 +330,7 @@ func (c *Client) SOCK_Get(key string, resp *string, nfk *string) (found bool, er
 			return
 		}
 	}
-
-	*resp = reply
+	found, *resp = true, reply
 	return
 } // end func SOCK_Get
 
