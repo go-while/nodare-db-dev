@@ -40,7 +40,7 @@ type Options struct {
 }
 
 type Client struct {
-	logger     ilog.LOG
+	logger     ilog.ILOG
 	mux        sync.Mutex
 	stop       chan struct{}
 	addr       string
