@@ -38,10 +38,12 @@ type Options struct {
 	LogFile     string
 	StopChan    chan struct{}
 	WG          sync.WaitGroup
+	Logs        ilog.ILOG
 }
 
-type Clients interface {
+type Client interface {
 	//Booted []*Client
+	SetupClients() (Clients, error)
 	NewClient(opts *Options) (*Client, error)
 }
 
@@ -62,13 +64,14 @@ type Client struct {
 	tp         *textproto.Conn
 	http       *http.Client
 	wg         sync.WaitGroup
+	logs       ilog.ILOG
 }
 
-func SetupClients() (Clients, error) {
+func (c *Client) SetupClients() (Clients, error) {
 
 } // end func SetupClients
 
-func NewClient(opts *Options) (*Client, error) {
+func (c *Client) NewClient(opts *Options) (*Client, error) {
 	switch opts.Addr {
 		case "":
 			// no addr:port supplied
