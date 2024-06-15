@@ -4,9 +4,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/go-while/nodare-db-dev/database"
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/utils"
 	"log"
+	"io"
 	"net"
 	"net/textproto"
 	"os"
@@ -19,6 +21,7 @@ import (
 
 type SOCKET struct {
 	stop_chan      chan struct{}
+	db             *database.XDatabase
 	wg             sync.WaitGroup
 	mux            sync.Mutex
 	cpu            sync.Mutex
@@ -31,15 +34,19 @@ type SOCKET struct {
 	tcplistener    net.Listener
 	tlslistener    net.Listener
 	acl            *AccessControlList
+	id             uint64
+	tp             *textproto.Conn
+	conn           net.Conn
 }
 
 var (
 	DefaultACL map[string]bool // can be set before booting
 )
 
-func NewSocketHandler(cfg VConfig, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup) *SOCKET {
+func NewSocketHandler(cfg VConfig, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup, db *database.XDatabase) *SOCKET {
 	sockets := &SOCKET{
 		logs: logs,
+		db: db,
 	}
 	logs.Debug("NewSocketHandler cfg='%#v'", cfg)
 	sockets.stop_chan = stop_chan
@@ -193,31 +200,32 @@ func (c *SOCKET) Start(tcpListen string, tlsListen string, socketPath string, tl
 
 func (c *SOCKET) handleSocketConn(conn net.Conn, raddr string, socket bool) {
 	defer conn.Close()
-	tp := textproto.NewConn(conn)
+	c.conn = conn
+	c.tp = textproto.NewConn(conn)
 	if !socket {
 		// send welcome banner to incoming tcp connection
-		err := tp.PrintfLine(ACK)
+		err := c.tp.PrintfLine("200 X") // server.ACK
 		if err != nil {
 			return
 		}
 	}
-	//var set, tmpset uint64
+	// counter
+	//var add, tmpadd uint64
+	var set, tmpset uint64
+	//var get, tmpget uint64
+	//var del, tmpdel uint64
 
-	/*
-		var add, tmpadd uint64
-
-		var get, tmpget uint64
-		var del, tmpdel uint64
-	*/
+	// session flags
 	var mode = no_mode
 	var state int8 = -1
 	var numBy int
-	var k, v string
-	var reply []string
 	var cmd string
+	var key string
+	var keys []string
+	var vals map[string]*string
 readlines:
 	for {
-		line, err := tp.ReadLine()
+		line, err := c.tp.ReadLine()
 		if err != nil {
 			log.Printf("Error handleConn err='%v'", err)
 			break readlines
@@ -231,14 +239,19 @@ readlines:
 		//
 		// server replies on order of sending
 
-		// 	ADD|4\r\n
+		// 	ADD|3\r\n
 		// 		AveryLooongKey1111111NameforThisLIST\r\n
 		//		aValue01forThisList\r\n
 		//		aValue02forThisList\r\n
 		//		aValue03forThisList\r\n
 		//		\x17\r\n
 
-		// 	SET|6\r\n
+		// 	SET|1\r\n
+		//		AveryLooongKey11\r\n
+		//		AveryLongValue\r\n
+		//		\x17\r\n
+
+		// 	SET|3\r\n
 		// 		AveryLooongKey11\r\n
 		// 		AveryLongValue\r\n
 		// 		\x07\r\n
@@ -263,13 +276,16 @@ readlines:
 		//		OneKeyMoarPlease\r\n
 		//		\x17\r\n
 
+
 		switch mode {
 		case modeADD:
+			log.Printf("SOCKET modeADD line='%#v'", line)
 			// TODO process multiple Add lines here.
 
 		case modeSET:
+			log.Printf("SOCKET modeSET line='%#v'", line)
 			// TODO process multiple Set lines here.
-			log.Printf("SOCKET SET: line='%s'", line)
+
 			// receive first line with key at state 0
 			// receive second line with value at state 1
 			// if client sends \x07 (BEL) flip state to 0 and continue reading lines
@@ -279,86 +295,126 @@ readlines:
 			switch state {
 			case 0: // state 0 reads key
 				if len(line) > KEY_LIMIT {
-					tp.PrintfLine(CAN)
+					c.tp.PrintfLine(CAN)
 					break readlines
 				}
-				k = line
+				key = line
 				state++ // state is 1 now
 				continue readlines
 
 			case 1: // state 1 reads val
 				if len(line) > VAL_LIMIT {
-					tp.PrintfLine(CAN)
+					c.tp.PrintfLine(CAN)
 					break readlines
 				}
-				v = line
-				numBy--
-
-				// TODO!
 				// got a k,v pair!
+				//v = line
+				numBy-- // decrease counter
+				tmpset++ // increase tmp counter, amount we have to set
 
-				// process Set request to db
+				keys = append(keys, key)
+				vals[key] = &line
 
-				// store reply in slice and reply in one batch
-				// or flush frequently to cli
-				// or pass answer to cli now
-				// ????
-
-				log.Printf("SOCKET recv k='%s' v='%s' rep=%d", k, v, len(reply))
+				log.Printf("SOCKET modeSet state1 recv k='%s' v='%s' keys=%d vals=%d", key, line, len(keys), len(vals))
+				key = ""
 				state++ // state is 2 now
 				continue readlines
 
 			case 2: // state 2 reads ETB or BEL
 				if len(line) != 1 {
-					tp.PrintfLine(CAN)
+					c.tp.PrintfLine(CAN)
 					break readlines
 				}
+
 				switch line {
 				case ETB:
-					// client finished streaming command: SET
+					log.Printf("SOCKET modeSet state2 got ETB")
+					// client finished streaming
+					// set key:val pairs
+					loopkeys:
+					for _, akey := range keys {
+						val := vals[akey]
+						seterr := c.db.Set(akey, *val)
+						if seterr != nil {
+							c.logs.Error("SOCKET modeSet state2 seterr='%v'", seterr)
+							// reply error
+							_, ioerr := io.WriteString(c.conn, NUL+key)
+							if ioerr != nil {
+								// could not send reply, peer disconnected?
+								c.logs.Error("SOCKET modeSet state2 reply seterr='%v' ioerr='%v'", seterr, ioerr)
+								break readlines
+							}
+							continue loopkeys
+						}
+						tmpset--
+						set++
+						c.logs.Info("SOCKET state2 ETB Set k='%s' v='%s'", akey, *val)
+					} // end for keys
+
+					// reply single ACK
+					c.logs.Info("SOCKET state2 reply ACK")
+					_, ioerr := io.WriteString(c.conn, ACK)
+					if ioerr != nil {
+						c.logs.Error("SOCKET modeSet state2 reply ioerr='%v'", ioerr)
+						break readlines
+					}
+
+					keys, vals = nil, nil
 					mode = no_mode
-					state = -2 // command done
+					state = -2
 					// state reverts when client sends next command
 					continue readlines
+
 				case BEL:
+					c.logs.Info("SOCKET modeSet state2 got BEL")
 					// client continues sending k,v pairs
 					continue readlines
 				}
 			}
 
 		case modeGET:
+			c.logs.Info("SOCKET modeGET line='%#v'", line)
 			// TODO process multiple Get lines here.
-			log.Printf("SOCKET GET: '%s'", line)
 
 		case modeDEL:
+			c.logs.Info("SOCKET modeDEL line='%#v'", line)
 			// TODO process multiple Del lines here.
-			log.Printf("SOCKET DEL: '%s'", line)
 
 		case no_mode:
+			keys = nil
+			if vals == nil {
+				vals = make(map[string]*string, 8)
+			}
 			// 1st arg is command
 			// 2nd arg is number of bytes client wants to send
 			// 		or run,wait for MemProfile
 			// len min: X|1  || 2nd is not '|' || line tooooooooooooooooo long
 			if len(line) < 3 || line[1] != '|' {
 				// invalid format
-				tp.PrintfLine(CAN)
+				c.tp.PrintfLine(CAN)
 				break readlines
 			}
 			state = -1
 			// no mode is set: find command and set mode to accept reading of multiple lines
 			split := strings.Split(line, "|")[0:2]
 			if len(split) < 2 {
-				tp.PrintfLine(CAN)
+				c.tp.PrintfLine(CAN)
 				break readlines
 			}
 			cmd = string(split[0])
+			//add, tmpadd = 0, 0
+			set, tmpset = 0, 0
+			//del, tmpdel = 0, 0
+			//get, tmpget = 0, 0
 			switch cmd {
 
-			//case MagicA: // ADD
-			//	mode = modeADD
+			/*
+			case MagicA: // ADD
+				mode = modeADD
 
-			//case MagicL: // LIST
-			//	mode = modeLIST
+			case MagicL: // LIST
+				mode = modeLIST
+			*/
 
 			case MagicS: // SET key => value
 				numBy = utils.Str2int(split[1])
@@ -426,7 +482,7 @@ readlines:
 					Prof.StartMemProfile(run, wait)
 					c.mem.Unlock()
 				}(runi, waiti)
-				tp.PrintfLine("200 StartMemProfile run=%d wait=%d", runi, waiti)
+				c.tp.PrintfLine("200 StartMemProfile run=%d wait=%d", runi, waiti)
 
 			case Magic2:
 				// start/stop cpu profiling
@@ -436,16 +492,16 @@ readlines:
 				c.cpu.Lock()
 				if c.CPUfile != nil {
 					Prof.StopCPUProfile()
-					tp.PrintfLine("200 StopCPUProfile")
+					c.tp.PrintfLine("200 StopCPUProfile")
 					c.CPUfile = nil
 				} else {
 					CPUfile, err := Prof.StartCPUProfile()
 					if err != nil || CPUfile == nil {
 						log.Printf("ERROR SOCKET StartCPUProfile err='%v'", err)
-						tp.PrintfLine("400 ERR StartCPUProfile")
+						c.tp.PrintfLine("400 ERR StartCPUProfile")
 					} else {
 						c.CPUfile = CPUfile
-						tp.PrintfLine("200 StartCPUProfile")
+						c.tp.PrintfLine("200 StartCPUProfile")
 					}
 				}
 				c.cpu.Unlock()

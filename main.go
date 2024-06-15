@@ -49,7 +49,7 @@ func main() {
 		if database.HASHER == database.HASH_siphash {
 			db.XDICK.GenerateSALT()
 		}
-		srv := server.NewFactory().NewNDBServer(cfg, server.NewXNDBServer(db, logs), logs, stop_chan, wg)
+		srv := server.NewFactory().NewNDBServer(cfg, server.NewXNDBServer(db, logs), logs, stop_chan, wg, db)
 		if flag_pprof != "" {
 			Prof = prof.NewProf()
 			server.Prof = Prof

@@ -196,7 +196,7 @@ func (c *Client) CliConnect(client *Client) (*Client, error) {
 	}
 	c.logs.Info("client established c.sock='%v' c.http='%v' mode=%d", c.sock, c.http, c.Mode)
 	if c.tp != nil {
-		_, _, err := c.tp.ReadCodeLine(6) // server.ACK
+		_, _, err := c.tp.ReadCodeLine(200) // server.ACK
 		if err != nil {
 			c.logs.Error("c.tp.ReadCodeLine init err='%v'", err)
 			return nil, err
@@ -264,89 +264,151 @@ func (c *Client) Transport() {
 }
 
 
-func (c *Client) SOCK_Get(key string, reply *string) (err error) {
+func (c *Client) SOCK_Set(key string, val string, resp *string) (err error) {
 	if c.tp == nil {
-		err = fmt.Errorf("ERROR SOCK_Get c.tp=nil")
+		err = fmt.Errorf("ERROR SOCK_Set c.tp nil")
 		return
 	}
+
+	// 	SET|1\r\n
+	//		AveryLooongKey11\r\n
+	//		AveryLongValue\r\n
+	//		\x17\r\n
+
+	request := server.MagicS+"|1"+server.CRLF+key+server.CRLF+val+server.CRLF+server.ETB+server.CRLF
+	c.logs.Debug("SOCK_Set k='%v' v='%v' request='%#v'", key, val, request)
+	_, err = io.WriteString(c.sock, request)
+	if err != nil {
+		return
+	}
+
+	c.logs.Debug("SOCK_Set k='%v' v='%v' wait ReadLine", key, val)
+	reply, err := c.tp.ReadLine()
+	if err != nil {
+		return
+	}
+	c.logs.Debug("SOCK_Set k='%v' v='%v' got ReadLine reply='%#v'", key, val, reply)
+	*resp = reply
+	return
+} // end func SOCK_Set
+
+func (c *Client) SOCK_Get(key string, resp *string) (err error) {
+	if c.tp == nil {
+		err = fmt.Errorf("ERROR SOCK_Get c.tp nil")
+		return
+	}
+
 	request := server.MagicG+"|1"+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
 	_, err = io.WriteString(c.sock, request)
 	if err != nil {
 		return err
 	}
-	*reply, err = c.tp.ReadLine()
+
+	reply, err := c.tp.ReadLine()
+	if err != nil {
+		return
+	}
+
+	*resp = reply
 	return
 } // end func SOCK_Get
 
+func (c *Client) SOCK_Del(key string, resp *string) (err error) {
+	if c.tp == nil {
+		err = fmt.Errorf("ERROR SOCK_Get c.tp nil")
+		return
+	}
+
+	request := server.MagicD+"|1"+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
+	_, err = io.WriteString(c.sock, request)
+	if err != nil {
+		return err
+	}
+
+	reply, err := c.tp.ReadLine()
+	if err != nil {
+		return
+	}
+
+	*resp = reply
+	return
+} // end func SOCK_Del
+
 func (c *Client) SOCK_GetMany(keys *[]string) (err error) {
 	if c.tp == nil {
-		err = fmt.Errorf("ERROR SOCK_GetMany c.tp=nil")
+		err = fmt.Errorf("ERROR SOCK_GetMany c.tp nil")
 		return
 	}
 	return
 } // end func SOCK_GetMany
 
-func Construct_SOCK_GetMany(key string) {
+func Construct_SOCK_GetMany(key []string) {
 
 } // end func Construct_SOCK_GetMany
 
-func (c *Client) HTTP_Get(key string) (string, error) {
+func (c *Client) HTTP_Get(key string, val *string) (error) {
 	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
 	resp, err := c.http.Get(c.url + "/get/" + key)
 	if err != nil {
 		c.logs.Error("c.http.Get err='%v'", err)
-		return "", err
+		return err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		c.logs.Error("c.http.Get respBody err='%v'", err)
-		return "", err
+		return err
 	}
 	c.logs.Debug("c.http.Get resp='%#v'", resp)
-	return string(body), nil
-}
+	*val = string(body)
+	return nil
+} // end func HTTP_Get
 
-func (c *Client) HTTP_Set(key string, value string) (string, error) {
+func (c *Client) HTTP_Set(key string, value string, resp *string) (err error) {
 	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
 	if c.http == nil {
-		c.logs.Error("c.http.Set c.http == nil")
-		return "", fmt.Errorf("set failed c.http is nil")
+		err = fmt.Errorf("c.http.Set failed c.http nil")
+		c.logs.Error("%s",err)
+		return
 	}
-	resp, err := http.Post(c.url+"/set", "application/json", bytes.NewBuffer([]byte(`{"`+key+`":"`+value+`"}`)))
-	if err != nil {
-		c.logs.Error("c.http.Set err='%v'", err)
-		return "", err
+	rresp, rerr := http.Post(c.url+"/set", "application/json", bytes.NewBuffer([]byte(`{"`+key+`":"`+value+`"}`)))
+	if rerr != nil {
+		c.logs.Error("c.http.Post Set err='%v'", rerr)
+		err = rerr
+		return
 	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		c.logs.Error("c.http.Set respBody err='%v'", err)
-		return "", err
-	}
-	c.logs.Debug("c.http.Set resp='%#v'", resp)
-	return string(body), nil
-}
 
-func (c *Client) HTTP_Del(key string) (string, error) {
+	defer rresp.Body.Close()
+	body, err := ioutil.ReadAll(rresp.Body)
+	if err != nil {
+		c.logs.Error("c.http.Set rrespBody err='%v'", err)
+		return
+	}
+	c.logs.Debug("c.http.Set rresp='%#v'", rresp)
+	*resp = string(body)
+	return
+} // end func HTTP_Set
+
+func (c *Client) HTTP_Del(key string, resp *string) (err error) {
 	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
-	resp, err := c.http.Get(c.url + "/del/" + key)
+	rresp, err := c.http.Get(c.url + "/del/" + key)
 	if err != nil {
 		c.logs.Error("c.http.Del err='%v'", err)
-		return "", err
+		return
 	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	defer rresp.Body.Close()
+	body, err := ioutil.ReadAll(rresp.Body)
 	if err != nil {
 		c.logs.Error("c.http.Del respBody err='%v'", err)
-		return "", err
+		return
 	}
+	*resp = string(body)
 	c.logs.Debug("c.http.Del resp='%#v'", resp)
-	return string(body), nil
-}
+	return
+} // end func HTTP_Del
 
 func (c *Client) worker(runtest bool) {
 	c.wg.Add(1)

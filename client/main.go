@@ -112,13 +112,22 @@ func main() {
 			}
 			testmap := make(map[string]string)
 			log.Printf("Launch insert test round=%d/%d", r, rounds)
+			var err error
+			var resp string
 			for i := 1; i <= items; i++ {
 				// %010 leftpads i and r with 10 zeroes, like 17 => 0000000017
-				key := fmt.Sprintf("atestKey%010d-r-%010d", i, r)
-				val := fmt.Sprintf("atestVal%010d-r-%010d", i, r)
-				res, err := netCli.HTTP_Set(key, val)
+				key := fmt.Sprintf("Atestkey%010d-r-%010d", i, r)
+				val := fmt.Sprintf("aTestVal%010d-r-%010d", i, r)
+				switch netCli.Mode {
+					case 1:
+						// http mode
+						err = netCli.HTTP_Set(key, val, &resp)
+					case 2:
+						// sock mode // TODO! add test for SetMany
+						err = netCli.SOCK_Set(key, val, &resp)
+				}
 				if err != nil {
-					log.Fatalf("ERROR set key='%s' => val='%s' err='%v' res='%v'", key, val, err, res)
+					log.Fatalf("ERROR Set key='%s' => val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
 				}
 				testmap[key] = val
 			}
@@ -161,11 +170,11 @@ forever:
 			for k, v := range testmap {
 				switch netCli.Mode {
 					case 1:
-						val, err = netCli.HTTP_Get(k) // http Get Key
+						// http mode
+						err = netCli.HTTP_Get(k, &val) // http Get Key: val is passed as pointer!
 					case 2:
-						// socket
-						// TODO! add another test for many Gets
-						val, err = netCli.SOCK_Get(k) // socket Get key
+						// sock mode // TODO! add test for GetMany
+						err = netCli.SOCK_Get(k, &val) // socket Get key: val is passed as pointer!
 				}
 				if err != nil {
 					log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d", k, err, netCli.Mode)
