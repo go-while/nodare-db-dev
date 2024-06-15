@@ -41,7 +41,8 @@ type Options struct {
 }
 
 type Clients interface {
-	Booted []*Client
+	//Booted []*Client
+	NewClient(opts *Options) (*Client, error)
 }
 
 type Client struct {
@@ -65,7 +66,7 @@ type Client struct {
 
 func SetupClients() (Clients, error) {
 
-}
+} // end func SetupClients
 
 func NewClient(opts *Options) (*Client, error) {
 	switch opts.Addr {
