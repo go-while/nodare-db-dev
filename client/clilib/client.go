@@ -35,11 +35,12 @@ type Options struct {
 	Auth        string
 	Daemon      bool
 	TestWorker  bool
+	LogFile     string
 	Stop        chan struct{}
 }
 
 type Client struct {
-	logger     *ilog.LOG
+	logger     ilog.LOG
 	mux        sync.Mutex
 	stop       chan struct{}
 	addr       string
@@ -51,6 +52,7 @@ type Client struct {
 	daemon     bool
 	testWorker bool
 	conn       net.Conn
+	tp         *textproto.Conn
 	http       *http.Client
 }
 
@@ -79,9 +81,10 @@ func NewClient(opts *Options) (*Client, error) {
 	} // end switch Addr
 
 	log.Printf("NewClient opts='%#v'", opts)
+
 	// setup new client
 	client := &Client{
-		logger:     ilog.NewLogger(ilog.GetEnvLOGLEVEL()),
+		logger:     ilog.NewLogger(ilog.GetEnvLOGLEVEL(), opts.LogFile),
 		addr:       opts.Addr,
 		mode:       opts.Mode,
 		ssl:        opts.SSL,
@@ -134,7 +137,8 @@ func (c *Client) Connect(client *Client) (*Client, error) {
 				return nil, err
 			}
 			c.conn = conn
-		case false:
+			c.tp = textproto.NewConn(c.conn)
+		default:
 			// connect to TCP socket
 			if c.addr == "" {
 				c.addr = DefaultAddrTCPsocket
@@ -146,6 +150,7 @@ func (c *Client) Connect(client *Client) (*Client, error) {
 				return nil, err
 			}
 			c.conn = conn
+			c.tp = textproto.NewConn(c.conn)
 		} // end switch c.ssl
 	default:
 		c.logger.Error("client invalid mode=%d", c.mode)

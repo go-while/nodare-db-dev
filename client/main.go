@@ -19,6 +19,7 @@ var (
 	items int
 	parallel int
 	rounds int
+	logfile string
 )
 
 func main() {
@@ -33,6 +34,7 @@ func main() {
 	flag.IntVar(&parallel, "workers", 4, "start N workers")
 	flag.IntVar(&items, "items", 100000, "insert this many items per parallel worker")
 	flag.IntVar(&rounds, "rounds", 10, "do N rounds:  distribute over workers")
+	flag.IntVar(&logfile, "logfile", "", "logfile for client")
 	flag.Parse()
 
 	netcli, err := client.NewClient(&client.Options{
