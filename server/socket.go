@@ -196,7 +196,7 @@ func (c *SOCKET) handleSocketConn(conn net.Conn, raddr string, socket bool) {
 	tp := textproto.NewConn(conn)
 	if !socket {
 		// send welcome banner to incoming tcp connection
-		err := tp.PrintfLine("200 NDB")
+		err := tp.PrintfLine(ACK)
 		if err != nil {
 			return
 		}
@@ -354,13 +354,13 @@ readlines:
 			cmd = string(split[0])
 			switch cmd {
 
-			//case magicA: // ADD
+			//case MagicA: // ADD
 			//	mode = modeADD
 
-			//case magicL: // LIST
+			//case MagicL: // LIST
 			//	mode = modeLIST
 
-			case magicS: // SET key => value
+			case MagicS: // SET key => value
 				numBy = utils.Str2int(split[1])
 				if numBy == 0 {
 					// abnormal: str2num failed parsing
@@ -371,7 +371,7 @@ readlines:
 				state++ // should be 0 now
 				continue readlines
 
-			case magicG: // GET key returns value or NUL
+			case MagicG: // GET key returns value or NUL
 				numBy = utils.Str2int(split[1])
 				if numBy == 0 {
 					// abnormal: str2num failed parsing
@@ -382,7 +382,7 @@ readlines:
 				state++ // should be 0 now
 				continue readlines
 
-			case magicD: // DEL key
+			case MagicD: // DEL key
 				numBy = utils.Str2int(split[1])
 				if numBy == 0 {
 					// abnormal: str2num failed parsing
@@ -393,7 +393,7 @@ readlines:
 				state++ // should be 0 now
 				continue readlines
 
-			case magic1:
+			case Magic1:
 				// 		M|  <--- use default: run capture 30 sec instantly
 				// 		M|60,30  <--- runs 60 secs but waits 30 sec before
 				//
@@ -428,7 +428,7 @@ readlines:
 				}(runi, waiti)
 				tp.PrintfLine("200 StartMemProfile run=%d wait=%d", runi, waiti)
 
-			case magic2:
+			case Magic2:
 				// start/stop cpu profiling
 				if !socket {
 					break readlines
@@ -450,7 +450,7 @@ readlines:
 				}
 				c.cpu.Unlock()
 
-			case magicZ:
+			case MagicZ:
 				// quit
 				break readlines
 

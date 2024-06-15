@@ -43,14 +43,14 @@ const CasePass = 0xFF
 const FlagSearch = 0x42
 
 // client proto flags
-const magic1 = "1" // mem-prof
-const magic2 = "2" // cpu-prof
-const magicA = "A" // add
-const magicD = "D" // del
-const magicG = "G" // get
-const magicL = "L" // list
-const magicS = "S" // set
-const magicZ = "Z" // quit
+const Magic1 = "1" // mem-prof
+const Magic2 = "2" // cpu-prof
+const MagicA = "A" // add
+const MagicD = "D" // del
+const MagicG = "G" // get
+const MagicL = "L" // list
+const MagicS = "S" // set
+const MagicZ = "Z" // quit
 
 // socket proto flags
 const KEY_LIMIT = 1024 * 1024 * 1024 // respond: CAN

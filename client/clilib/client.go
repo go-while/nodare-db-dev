@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/server"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -23,7 +24,7 @@ const DefaultAddrSSL = "localhost:2420"
 const DefaultAddrTCPsocket = "localhost:3420"
 const DefaultAddrTLSsocket = "localhost:4420"
 
-const DefaultClientConnectTimeout = time.Duration(9 * time.Second)
+const DefaultCliConnectTimeout = time.Duration(9 * time.Second)
 const DefaultRequestTimeout = time.Duration(9 * time.Second)
 const DefaultIdleCliTimeout = time.Duration(60 * time.Second)
 
@@ -34,44 +35,55 @@ type Options struct {
 	SSLinsecure bool
 	Auth        string
 	Daemon      bool
-	TestWorker  bool
+	RunTest  bool
 	LogFile     string
 	StopChan    chan struct{}
 	WG          sync.WaitGroup
 	Logs        ilog.ILOG
 }
 
-type Client interface {
-	//Booted []*Client
-	SetupClients() (Clients, error)
-	NewClient(opts *Options) (*Client, error)
+type CliHandler struct{
+	id int
+	slots int
+	Clients []*Client
+	mux sync.RWMutex
+	logs ilog.ILOG
 }
 
 type Client struct {
-	id         uint64
-	logger     ilog.ILOG
+	Mode       int // 1=http(s) 2=socket
+	wg         sync.WaitGroup
 	mux        sync.Mutex
+	logs       ilog.ILOG
 	stop_chan  chan struct{}
+	id         int
 	addr       string
 	url        string
-	mode       int // 1=http(s) 2=socket
 	ssl        bool
 	insecure   bool
 	auth       string
 	daemon     bool
-	testWorker bool
-	conn       net.Conn
-	tp         *textproto.Conn
+	runtest    bool
 	http       *http.Client
-	wg         sync.WaitGroup
-	logs       ilog.ILOG
+	sock       net.Conn
+	tp         *textproto.Conn
 }
 
-func (c *Client) SetupClients() (Clients, error) {
+func NewCliHandler(logs ilog.ILOG) (cli *CliHandler) {
+	log.Printf("Client.NewCliHandler")
+	return &CliHandler{
+		logs: logs,
+		// Clients [0] is not used: we count ids from 1!
+		// beware of the off-by-one error
+		// slice expands x2 when full
+		Clients: make([]*Client, 2),
+		slots: 1,
+	}
+} // end func NewCliHandler
 
-} // end func SetupClients
-
-func (c *Client) NewClient(opts *Options) (*Client, error) {
+func (cliH *CliHandler) NewCli(opts *Options) (*Client, error) {
+	cliH.mux.Lock()
+	defer cliH.mux.Unlock()
 	switch opts.Addr {
 		case "":
 			// no addr:port supplied
@@ -95,38 +107,47 @@ func (c *Client) NewClient(opts *Options) (*Client, error) {
 			} // end switch Mode
 	} // end switch Addr
 
-	log.Printf("NewClient opts='%#v'", opts)
-
+	cliH.logs.Info("NewCli opts='%#v'", opts)
 	// setup new client
 	client := &Client{
-		logger:     ilog.NewLogger(ilog.GetEnvLOGLEVEL(), opts.LogFile),
+		Mode:       opts.Mode,
 		addr:       opts.Addr,
-		mode:       opts.Mode,
 		ssl:        opts.SSL,
 		insecure:   opts.SSLinsecure,
 		auth:       opts.Auth,
 		daemon:     opts.Daemon,
-		testWorker: opts.TestWorker,
+		runtest:    opts.RunTest,
 		stop_chan:  opts.StopChan,
 		wg:         opts.WG,
+		logs:       cliH.logs,
 	}
-	return client.ClientConnect(client)
-}
+	cliconn, err := client.CliConnect(client)
+	if err != nil {
+		cliH.logs.Error("client.CliConnect addr='%s' failed err='%v'", err)
+		return nil, err
+	}
+	cliH.id++
+	cliconn.id = cliH.id
+	cliH.logs.Info("NewCli id=%d", cliH.id)
+	cliH.expandSlice()
+	cliH.Clients[cliH.id] = cliconn
+	return cliconn, nil
+} // end func NewCli
 
-func (c *Client) ClientConnect(client *Client) (*Client, error) {
+func (c *Client) CliConnect(client *Client) (*Client, error) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	c.wg.Add(1)
 	defer c.wg.Done()
-	if c.conn != nil || c.http != nil {
+	if c.sock != nil || c.http != nil {
 		// conn is established, return no error.
-		c.logger.Warn("connection already established!?")
+		c.logs.Warn("connection already established!?")
 		return client, nil
 	}
-	switch client.mode {
+	switch client.Mode {
 	case 1:
 		// connect to http(s)
-		c.SetupHTTPtransport() // FIXME catch error!
+		c.Transport() // FIXME catch error!
 
 	case 2:
 		// connect to sockets
@@ -148,43 +169,53 @@ func (c *Client) ClientConnect(client *Client) (*Client, error) {
 					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 				},
 			}
-			c.logger.Info("client connecting to tls://'%s'", c.addr)
+			c.logs.Info("client connecting to tls://'%s'", c.addr)
 			conn, err := tls.Dial("tcp", c.addr, conf)
 			if err != nil {
-				c.logger.Error("client.ClientConnect tls.Dial err='%v'", err)
+				c.logs.Error("client.CliConnect tls.Dial err='%v'", err)
 				return nil, err
 			}
-			c.conn = conn
-			c.tp = textproto.NewConn(c.conn)
+			c.sock = conn
+			c.tp = textproto.NewConn(c.sock)
 		default:
 			// connect to TCP socket
 			if c.addr == "" {
 				c.addr = DefaultAddrTCPsocket
 			}
-			c.logger.Info("client connecting to tcp://'%s'", c.addr)
+			c.logs.Info("client connecting to tcp://'%s'", c.addr)
 			conn, err := net.Dial("tcp", c.addr)
 			if err != nil {
-				c.logger.Error("client net.Dial err='%v'", err)
+				c.logs.Error("client net.Dial err='%v'", err)
 				return nil, err
 			}
-			c.conn = conn
-			c.tp = textproto.NewConn(c.conn)
+			c.sock = conn
+			c.tp = textproto.NewConn(c.sock)
 		} // end switch c.ssl
 	default:
-		c.logger.Error("client invalid mode=%d", c.mode)
+		c.logs.Error("client invalid mode=%d", c.Mode)
 	}
-	c.logger.Info("client established c.conn='%v' c.http='%v' mode=%d", c.conn, c.http, c.mode)
+	c.logs.Info("client established c.sock='%v' c.http='%v' mode=%d", c.sock, c.http, c.Mode)
+	if c.tp != nil {
+		_, _, err := c.tp.ReadCodeLine(6) // server.ACK
+		if err != nil {
+			c.logs.Error("c.tp.ReadCodeLine init err='%v'", err)
+			return nil, err
+		}
+		//go c.tpReader()
+		//go c.tpWriter()
+	}
 
-	if c.testWorker {
-		c.logger.Info("booting testWorker")
-		c.worker(c.testWorker)
+	if c.runtest {
+		c.logs.Warn("booting internal runtest not implemented") // TODO!
+		c.worker(c.runtest)
 	}
 	if c.daemon {
-		go c.worker(false)
+		go c.worker(c.runtest)
 		return nil, nil
 	}
+
 	return client, nil
-}
+} // end func CliConnect
 
 func (c *Client) tpReader() {
 	// reads data and responses from textproto conn
@@ -192,12 +223,12 @@ func (c *Client) tpReader() {
 	defer c.wg.Done()
 	forever:
 	for {
-		r, err := tp.ReadLine()
+		r, err := c.tp.ReadLine() // lines from server
 		if err != nil {
 			c.logs.Error("tp.Reader ReadLine err='%v'", err)
 			break forever
 		}
-		c.logs.Info("tpReader: line='%s'")
+		c.logs.Info("tpReader: line='%s'=%d", r, len(r))
 	} //end forever
 	c.logs.Info("tpReader closed")
 } // end func tpReader
@@ -209,7 +240,7 @@ func (c *Client) tpWriter() {
 	c.logs.Info("tpWriter closed")
 } // end func tpWriter
 
-func (c *Client) SetupHTTPtransport() {
+func (c *Client) Transport() {
 	if c.url == "" {
 		switch c.ssl {
 		case true:
@@ -218,7 +249,7 @@ func (c *Client) SetupHTTPtransport() {
 			c.url = "http://" + c.addr
 		}
 	}
-	t := &http.SetupHTTPtransport{
+	t := &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout:   60 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -227,125 +258,156 @@ func (c *Client) SetupHTTPtransport() {
 		TLSHandshakeTimeout: 60 * time.Second,
 	}
 	c.http = &http.Client{
-		SetupHTTPtransport: t,
+		Transport: t,
 	}
-	log.Printf("SetupHTTPtransport c.http='%v' c.url='%s'", c.http, c.url)
+	log.Printf("Transport c.http='%v' c.url='%s'", c.http, c.url)
 }
 
-func (c *Client) HTTPGet(key string) (string, error) {
+
+func (c *Client) SOCK_Get(key string, reply *string) (err error) {
+	if c.tp == nil {
+		err = fmt.Errorf("ERROR SOCK_Get c.tp=nil")
+		return
+	}
+	request := server.MagicG+"|1"+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
+	_, err = io.WriteString(c.sock, request)
+	if err != nil {
+		return err
+	}
+	*reply, err = c.tp.ReadLine()
+	return
+} // end func SOCK_Get
+
+func (c *Client) SOCK_GetMany(keys *[]string) (err error) {
+	if c.tp == nil {
+		err = fmt.Errorf("ERROR SOCK_GetMany c.tp=nil")
+		return
+	}
+	return
+} // end func SOCK_GetMany
+
+func Construct_SOCK_GetMany(key string) {
+
+} // end func Construct_SOCK_GetMany
+
+func (c *Client) HTTP_Get(key string) (string, error) {
 	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
 	resp, err := c.http.Get(c.url + "/get/" + key)
 	if err != nil {
-		c.logger.Error("c.http.Get err='%v'", err)
+		c.logs.Error("c.http.Get err='%v'", err)
 		return "", err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		c.logger.Error("c.http.Get respBody err='%v'", err)
+		c.logs.Error("c.http.Get respBody err='%v'", err)
 		return "", err
 	}
-	c.logger.Debug("c.http.Get resp='%#v'", resp)
+	c.logs.Debug("c.http.Get resp='%#v'", resp)
 	return string(body), nil
 }
 
-func (c *Client) HTTPSet(key string, value string) (string, error) {
+func (c *Client) HTTP_Set(key string, value string) (string, error) {
 	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
 	if c.http == nil {
-		c.logger.Error("c.http.Set c.http == nil")
+		c.logs.Error("c.http.Set c.http == nil")
 		return "", fmt.Errorf("set failed c.http is nil")
 	}
 	resp, err := http.Post(c.url+"/set", "application/json", bytes.NewBuffer([]byte(`{"`+key+`":"`+value+`"}`)))
 	if err != nil {
-		c.logger.Error("c.http.Set err='%v'", err)
+		c.logs.Error("c.http.Set err='%v'", err)
 		return "", err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		c.logger.Error("c.http.Set respBody err='%v'", err)
+		c.logs.Error("c.http.Set respBody err='%v'", err)
 		return "", err
 	}
-	c.logger.Debug("c.http.Set resp='%#v'", resp)
+	c.logs.Debug("c.http.Set resp='%#v'", resp)
 	return string(body), nil
 }
 
-func (c *Client) HTTPDel(key string) (string, error) {
+func (c *Client) HTTP_Del(key string) (string, error) {
 	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
 	resp, err := c.http.Get(c.url + "/del/" + key)
 	if err != nil {
-		c.logger.Error("c.http.Del err='%v'", err)
+		c.logs.Error("c.http.Del err='%v'", err)
 		return "", err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		c.logger.Error("c.http.Del respBody err='%v'", err)
+		c.logs.Error("c.http.Del respBody err='%v'", err)
 		return "", err
 	}
-	c.logger.Debug("c.http.Del resp='%#v'", resp)
+	c.logs.Debug("c.http.Del resp='%#v'", resp)
 	return string(body), nil
 }
 
-func (c *Client) worker(testWorker bool) {
+func (c *Client) worker(runtest bool) {
 	c.wg.Add(1)
 	defer c.wg.Done()
-	defer c.logger.Info("worker left")
-}
+	defer c.logs.Info("worker left runtest=%t", runtest)
+} // end func worker
 
-// escape/unescape ideas for textproto streaming protocol
+func (cliH *CliHandler) expandSlice() {
+	//cliH.logs.Debug("cliH expandSlice? maxclients=%d slots=%d cliH.id=%d", cap(cliH.Clients)-1, cliH.slots, cliH.id)
+	if cliH.slots > cliH.id { // beware of the off-by-one error
+		//cliH.logs.Debug("cliH not expandSlice")
+		return
+	}
+	newslots := cliH.slots*2
+	new := make([]*Client, newslots)
+
+	for i, cli := range cliH.Clients {
+		if cli == nil {
+			continue
+		}
+		new[i] = cli // copy value to new slice
+		cliH.Clients[i] = nil // nil value in old slice
+	} // end for range cliH.Clients
+
+	cliH.Clients = nil // nil the slice content
+	cliH.Clients = new // set new slice
+	cliH.slots = newslots
+	cliH.logs.Info("cliH expandSlice! slots=%d cap=%d id=%d newSlice=%d", cliH.slots, cap(cliH.Clients), cliH.id, len(new))
+} // end func expandSlice
+
+/*
+ * escape/unescape ideas for textproto streaming protocol
+ *
+ */
 
 // escape before sending
 func Escape(any string) (string) {
-	return EscapeCRLF(EscapeSEM(EscapeDOT(any)))
+	return EscapeCR(EscapeLF(any))
 }
 
 // unescape after retrieval
 func UnEscape(any string) (string) {
-	return UnEscapeCRLF(UnEscapeSEM(UnEscapeDOT(any)))
+	return UnEscapeCR(UnEscapeLF(any))
 }
 
-func EscapeDOT(any string) (string) {
-	if len(any) != 1 || any == "." {
-		return any
-	}
-	ret := ".."
+func EscapeCR(any string) (string) {
+	ret := strings.Replace(any, "\r", "\\r", -1)
 	return ret
 }
 
-func UnEscapeDOT(any string) (string) {
-	if len(any) != 2 || any == ".." {
-		return any
-	}
-	ret := "."
+func UnEscapeCR(any string) (string) {
+	ret := strings.Replace(any, "\\r", "\r", -1)
 	return ret
 }
 
-func EscapeSEM(any string) (string) {
-	if len(any) != 1 || any == "," {
-		return any
-	}
-	ret := ",,"
+func EscapeLF(any string) (string) {
+	ret := strings.Replace(any, "\n", "\\n", -1)
 	return ret
 }
 
-func UnEscapeSEM(any string) (string) {
-	if len(any) != 2 || any == ",," {
-		return any
-	}
-	ret := ","
-	return ret
-}
-
-func EscapeCRLF(any string) (string) {
-	ret := strings.Replace(any, "\r\n", "\\r\\n", -1)
-	return ret
-}
-
-func UnEscapeCRLF(any string) (string) {
-	ret := strings.Replace(any, "\\r\\n", "\r\n", -1)
+func UnEscapeLF(any string) (string) {
+	ret := strings.Replace(any, "\\n", "\n", -1)
 	return ret
 }
