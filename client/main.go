@@ -168,6 +168,7 @@ forever:
 			checked := 0
 			var err error
 			var val string
+			var nfk string
 			for k, v := range testmap {
 				switch netCli.Mode {
 					case 1:
@@ -176,11 +177,10 @@ forever:
 					case 2:
 						// sock mode
 						// TODO! add test for GetMany
-						var nfk string
 						err = netCli.SOCK_Get(k, &val, &nfk) // socket Get key: return val is passed as pointer!
 				}
 				if err != nil {
-					log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d", k, err, netCli.Mode)
+					log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d nfk='%s'", k, err, netCli.Mode, nfk)
 				}
 				if val != v {
 					log.Fatalf("ERROR verify k='%s' v='%s' != val='%#v' nfk='%s'", k, v, val, nfk)
