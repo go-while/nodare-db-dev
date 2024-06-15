@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/go-while/nodare-db-dev/logger"
+	"github.com/go-while/nodare-db-dev/server"
 	"io/ioutil"
 	"log"
 	"net"
@@ -35,13 +36,14 @@ type Options struct {
 	Daemon      bool
 	TestWorker  bool
 	LogFile     string
-	Stop        chan struct{}
+	StopChan    chan struct{}
+	WG          sync.WaitGroup
 }
 
 type Client struct {
 	logger     ilog.ILOG
 	mux        sync.Mutex
-	stop       chan struct{}
+	stop_chan  chan struct{}
 	addr       string
 	url        string
 	mode       int // 1=http(s) 2=socket
@@ -53,6 +55,7 @@ type Client struct {
 	conn       net.Conn
 	tp         *textproto.Conn
 	http       *http.Client
+	wg         sync.WaitGroup
 }
 
 func NewClient(opts *Options) (*Client, error) {
@@ -91,7 +94,8 @@ func NewClient(opts *Options) (*Client, error) {
 		auth:       opts.Auth,
 		daemon:     opts.Daemon,
 		testWorker: opts.TestWorker,
-		stop:       opts.Stop,
+		stop_chan:  opts.StopChan,
+		wg:         opts.WG,
 	}
 	return client.ClientConnect(client)
 }
@@ -99,6 +103,8 @@ func NewClient(opts *Options) (*Client, error) {
 func (c *Client) ClientConnect(client *Client) (*Client, error) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
+	c.wg.Add(1)
+	defer c.wg.Done()
 	if c.conn != nil || c.http != nil {
 		// conn is established, return no error.
 		c.logger.Warn("connection already established!?")
@@ -106,11 +112,11 @@ func (c *Client) ClientConnect(client *Client) (*Client, error) {
 	}
 	switch client.mode {
 	case 1:
-		// http(s)
-		c.Transport() // FIXME catch error!
+		// connect to http(s)
+		c.SetupHTTPtransport() // FIXME catch error!
 
 	case 2:
-		// sockets
+		// connect to sockets
 		switch c.ssl {
 		case true:
 			// connect to TLS socket
@@ -167,7 +173,24 @@ func (c *Client) ClientConnect(client *Client) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) Transport() {
+func (c *Client) tpReader() {
+	c.wg.Add(1)
+	defer c.wg.Done()
+	forever:
+	for {
+		r, err := tp.ReadLine()
+		c.logs.Info("tpReader: line='%s')
+	}
+	// reads data and responses from textproto conn
+} // end func tpReader
+
+func (c *Client) tpWriter() {
+	c.wg.Add(1)
+	defer c.wg.Done()
+	// sends commands and data to server via textproto conn
+} // end func tpWriter
+
+func (c *Client) SetupHTTPtransport() {
 	if c.url == "" {
 		switch c.ssl {
 		case true:
@@ -176,7 +199,7 @@ func (c *Client) Transport() {
 			c.url = "http://" + c.addr
 		}
 	}
-	t := &http.Transport{
+	t := &http.SetupHTTPtransport{
 		Dial: (&net.Dialer{
 			Timeout:   60 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -185,13 +208,13 @@ func (c *Client) Transport() {
 		TLSHandshakeTimeout: 60 * time.Second,
 	}
 	c.http = &http.Client{
-		Transport: t,
+		SetupHTTPtransport: t,
 	}
-	log.Printf("Transport c.http='%v' c.url='%s'", c.http, c.url)
+	log.Printf("SetupHTTPtransport c.http='%v' c.url='%s'", c.http, c.url)
 }
 
 func (c *Client) HTTPGet(key string) (string, error) {
-	c.mux.Lock() // we lock so nobody else can use the connection at the same time
+	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
 	resp, err := c.http.Get(c.url + "/get/" + key)
 	if err != nil {
@@ -209,7 +232,7 @@ func (c *Client) HTTPGet(key string) (string, error) {
 }
 
 func (c *Client) HTTPSet(key string, value string) (string, error) {
-	c.mux.Lock() // we lock so nobody else can use the connection at the same time
+	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
 	if c.http == nil {
 		c.logger.Error("c.http.Set c.http == nil")
@@ -231,10 +254,9 @@ func (c *Client) HTTPSet(key string, value string) (string, error) {
 }
 
 func (c *Client) HTTPDel(key string) (string, error) {
-	c.mux.Lock() // we lock so nobody else can use the connection at the same time
+	c.mux.Lock() // we lock so nobody else (multiple workers) can use the connection at the same time
 	defer c.mux.Unlock()
 	resp, err := c.http.Get(c.url + "/del/" + key)
-	//resp, err := c.http.Get(c.url+"/del/" + key)
 	if err != nil {
 		c.logger.Error("c.http.Del err='%v'", err)
 		return "", err
@@ -250,6 +272,8 @@ func (c *Client) HTTPDel(key string) (string, error) {
 }
 
 func (c *Client) worker(testWorker bool) {
+	c.wg.Add(1)
+	defer c.wg.Done()
 	defer c.logger.Info("worker left")
 }
 

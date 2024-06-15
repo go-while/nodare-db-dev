@@ -41,9 +41,10 @@ func main() {
 		SSL:        ssl,
 		Addr:       addr,
 		Mode:       mode,
-		Stop:       stop_chan,
+		StopChan:   stop_chan,
 		Daemon:     daemon,
 		TestWorker: testWorker,
+		WG:         wg,
 	})
 	if netcli == nil || err != nil {
 		log.Printf("ERROR netcli='%v' err='%v'", netcli, err)
