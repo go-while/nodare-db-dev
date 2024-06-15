@@ -323,6 +323,7 @@ func (c *Client) SOCK_Get(key string, resp *string, nfk *string) (found bool, er
 
 	switch string(reply[0]) {
 		case server.NUL:
+		c.logs.Warn("SOCK_GET key='%s' NUL")
 		// not found
 		if nfk != nil && len(reply) > 1 {
 			// extract the not-found-key (only with multiple requests)
