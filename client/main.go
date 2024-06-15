@@ -169,9 +169,10 @@ forever:
 			var err error
 			var val string
 			var nfk string
+			var found bool
 
 			for k, v := range testmap {
-				var found bool
+
 				switch netCli.Mode {
 					case 1:
 						// http mode
@@ -179,17 +180,18 @@ forever:
 					case 2:
 						// sock mode
 						// TODO! add test for GetMany
-						found, err = netCli.SOCK_Get(k, &val, &nfk) // socket Get key: return val is passed as pointer!
+						err = netCli.SOCK_Get(k, &val, &nfk, &found) // socket Get key: return val is passed as pointer!
 				}
-				if err != nil || !found {
+				if err != nil {
 					log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", k, err, netCli.Mode, nfk, found)
 				}
-				if val != v {
-					log.Fatalf("ERROR verify k='%s' v='%s' != val='%#v' nfk='%s'", k, v, val, nfk)
+				if found == false || val != v {
+					log.Fatalf("ERROR verify k='%s' v='%s' != val='%s' nfk='%s' found=%t", k, v, val, nfk, found)
 					os.Exit(1)
 				}
+
 				checked++
-			}
+			} // end for testmap
 			cliChan <- netCli // return netCli to other rounds
 			retintChan <- checked // returns checked amount to sum later
 			<-parChan // returns lock
@@ -209,7 +211,7 @@ final:
 		}
 	}
 	test_end := time.Now().Unix()
-	logs.Info("Check done! Result {\n test parallel=%d\n total=%d\n checked=%d\n items/round=%d\n rounds=%d\n insert took %d sec \n check took %d sec \n total %d sec\n }", parallel, items*rounds, checked, items, rounds, insert_end-start, test_end-insert_end, test_end-start)
+	logs.Info("Check done! Test Result:\n{\n parallel: %d\n total: %d\n checked: %d\n items/round: %d\n rounds: %d\n insert: %d sec\n check: %d sec\n total: %d sec\n}", parallel, items*rounds, checked, items, rounds, insert_end-start, test_end-insert_end, test_end-start)
 	logs.Info("infinite wait on stop_chan")
 	<-stop_chan
 

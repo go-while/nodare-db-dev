@@ -298,7 +298,7 @@ func (c *Client) SOCK_Set(key string, val string, resp *string) (err error) {
 	return
 } // end func SOCK_Set
 
-func (c *Client) SOCK_Get(key string, resp *string, nfk *string) (found bool, err error) {
+func (c *Client) SOCK_Get(key string, resp *string, nfk *string, found *bool) (err error) {
 	if c.tp == nil {
 		err = fmt.Errorf("ERROR SOCK_Get c.tp nil")
 		return
@@ -317,12 +317,14 @@ func (c *Client) SOCK_Get(key string, resp *string, nfk *string) (found bool, er
 
 	reply, err := c.tp.ReadLine()
 	if err != nil {
+		log.Printf("SOCK_GET key='%s' ReadLine err='%#v'", key, err)
 		return
 	}
 	log.Printf("SOCK_GET key='%s' reply='%#v'", key, reply)
 
 	switch string(reply[0]) {
 		case server.NUL:
+		*found = false
 		c.logs.Warn("SOCK_GET key='%s' NUL")
 		// not found
 		if nfk != nil && len(reply) > 1 {
@@ -331,7 +333,8 @@ func (c *Client) SOCK_Get(key string, resp *string, nfk *string) (found bool, er
 			return
 		}
 	}
-	found, *resp = true, reply
+	*found = true
+	*resp = reply
 	return
 } // end func SOCK_Get
 
