@@ -40,7 +40,12 @@ type Options struct {
 	WG          sync.WaitGroup
 }
 
+type Clients interface {
+	Booted []*Client
+}
+
 type Client struct {
+	id         uint64
 	logger     ilog.ILOG
 	mux        sync.Mutex
 	stop_chan  chan struct{}
@@ -56,6 +61,10 @@ type Client struct {
 	tp         *textproto.Conn
 	http       *http.Client
 	wg         sync.WaitGroup
+}
+
+func SetupClients() (Clients, error) {
+
 }
 
 func NewClient(opts *Options) (*Client, error) {
@@ -174,20 +183,26 @@ func (c *Client) ClientConnect(client *Client) (*Client, error) {
 }
 
 func (c *Client) tpReader() {
+	// reads data and responses from textproto conn
 	c.wg.Add(1)
 	defer c.wg.Done()
 	forever:
 	for {
 		r, err := tp.ReadLine()
-		c.logs.Info("tpReader: line='%s')
-	}
-	// reads data and responses from textproto conn
+		if err != nil {
+			c.logs.Error("tp.Reader ReadLine err='%v'", err)
+			break forever
+		}
+		c.logs.Info("tpReader: line='%s'")
+	} //end forever
+	c.logs.Info("tpReader closed")
 } // end func tpReader
 
 func (c *Client) tpWriter() {
 	c.wg.Add(1)
 	defer c.wg.Done()
 	// sends commands and data to server via textproto conn
+	c.logs.Info("tpWriter closed")
 } // end func tpWriter
 
 func (c *Client) SetupHTTPtransport() {
