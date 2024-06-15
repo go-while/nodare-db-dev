@@ -37,8 +37,8 @@ func main() {
 	flag.StringVar(&sock, "sock", "", "uri to non-default socket (addr:port)")
 	flag.IntVar(&mode, "mode", 2, "mode=1=http(s) | mode=2=socket")
 	flag.BoolVar(&ssl, "ssl", false, "use secure connection")
-	flag.IntVar(&items, "items", 100000, "insert this many items per parallel worker")
-	flag.IntVar(&rounds, "rounds", 10, "test do N rounds")
+	flag.IntVar(&items, "items", 125000, "insert this many items per parallel worker")
+	flag.IntVar(&rounds, "rounds", 8, "test do N rounds")
 	flag.IntVar(&parallel, "parallel", 8, "limits parallel tests to N conns")
 	flag.BoolVar(&runtest, "runtest", true, "runs the test after connecting")
 	flag.StringVar(&logfile, "logfile", "", "logfile for client")
@@ -211,7 +211,8 @@ final:
 		}
 	}
 	test_end := time.Now().Unix()
-	logs.Info("Check done! Test Result:\n{\n parallel: %d\n total: %d\n checked: %d\n items/round: %d\n rounds: %d\n insert: %d sec\n check: %d sec\n total: %d sec\n}", parallel, items*rounds, checked, items, rounds, insert_end-start, test_end-insert_end, test_end-start)
+	logs.Info("Check done! Test Result:\n{\n parallel: %d\n total: %d\n checked: %d\n items/round: %d\n rounds: %d\n insert: %d sec (%d/sec)\n check: %d sec (%d/sec)\n total: %d sec\n}",
+											parallel, items*rounds, checked, items, rounds, insert_end-start, int64(checked)/(insert_end-start), test_end-insert_end, int64(checked)/(test_end-insert_end), test_end-start)
 	logs.Info("infinite wait on stop_chan")
 	<-stop_chan
 
