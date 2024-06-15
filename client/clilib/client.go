@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
-	"github.com/go-while/nodare-db/logger"
+	"github.com/go-while/nodare-db-dev/logger"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"net/textproto"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,10 @@ import (
 
 const DefaultAddr = "localhost:2420"
 const DefaultAddrSSL = "localhost:2420"
+
+const DefaultAddrTCPsocket = "localhost:3420"
+const DefaultAddrTLSsocket = "localhost:4420"
+
 const DefaultConnectTimeout = time.Duration(9 * time.Second)
 const DefaultRequestTimeout = time.Duration(9 * time.Second)
 const DefaultIdleCliTimeout = time.Duration(60 * time.Second)
@@ -38,7 +43,7 @@ type Client struct {
 	stop       chan struct{}
 	addr       string
 	url        string
-	mode       int
+	mode       int // 1=http(s) 2=socket
 	ssl        bool
 	insecure   bool
 	auth       string
@@ -69,18 +74,21 @@ func (c *Client) Connect(client *Client) (*Client, error) {
 	defer c.mux.Unlock()
 	if c.conn != nil || c.http != nil {
 		// conn is established, return no error
-		c.logger.Info("connection already established!?")
+		c.logger.Warn("connection already established!?")
 		return client, nil
 	}
 	switch client.mode {
 	case 1:
+		// http(s)
 		c.Transport() // FIXME catch error!
 
 	case 2:
+		// sockets
 		switch c.ssl {
 		case true:
+			// connect to TLS socket
 			if c.addr == "" {
-				c.addr = DefaultAddrSSL
+				c.addr = DefaultAddrTLSsocket
 			}
 			conf := &tls.Config{
 				InsecureSkipVerify: c.insecure,
@@ -92,9 +100,6 @@ func (c *Client) Connect(client *Client) (*Client, error) {
 				PreferServerCipherSuites: true,
 				CipherSuites: []uint16{
 					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					//tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-					//tls.TLS_AES_256_GCM_SHA384,
-					//tls.TLS_AES_128_GCM_SHA256,
 				},
 			}
 			c.logger.Info("client connecting to tls://'%s'", c.addr)
@@ -105,8 +110,9 @@ func (c *Client) Connect(client *Client) (*Client, error) {
 			}
 			c.conn = conn
 		case false:
+			// connect to TCP socket
 			if c.addr == "" {
-				c.addr = DefaultAddr
+				c.addr = DefaultAddrTCPsocket
 			}
 			c.logger.Info("client connecting to tcp://'%s'", c.addr)
 			conn, err := net.Dial("tcp", c.addr)

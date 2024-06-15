@@ -18,7 +18,7 @@ func main() {
 	testWorker := true // runs a test after connecting
 	daemon := false
 	ssl := false
-	mode := 1
+	mode := 1 // http(s) || mode = 2 raw tcp (with tls)
 	addr := "localhost:2420"
 
 	netcli, err := client.NewClient(&client.Options{
@@ -29,7 +29,6 @@ func main() {
 		Daemon:     daemon,
 		TestWorker: testWorker,
 	})
-	time.Sleep(time.Second)
 	if netcli == nil || err != nil {
 		log.Printf("ERROR netcli='%v' err='%v'", netcli, err)
 		return

@@ -12,7 +12,7 @@ const (
 	INFO    = 0x1
 	WARN    = 0x2
 	DEBUG   = 0x3
-	MAXSIZE = 100 * 1024 * 1024 // 100 MB
+	//MAXSIZE = 100 * 1024 * 1024 // 100 MB
 )
 
 type ILOG interface {
@@ -32,7 +32,6 @@ type LOG struct {
 	mux      sync.RWMutex
 	LogFile  *os.File
 	LOGLEVEL int
-	wrote    int // counts bytes
 }
 
 func NewLogger(lvl int, logfile string) ILOG {
@@ -148,16 +147,12 @@ func (l *LOG) Info(format string, args ...any) {
 
 // Warn logs a message at the warn level.
 func (l *LOG) Warn(format string, args ...any) {
-	l.mux.RLock()
-	defer l.mux.RUnlock()
 	// always print warnings
 	log.Printf("[WARN] "+format, args...)
 }
 
 // Error logs a message at the error level.
 func (l *LOG) Error(format string, args ...any) {
-	l.mux.RLock()
-	defer l.mux.RUnlock()
 	// always print errors
 	log.Printf("[ERROR] "+format, args...)
 }

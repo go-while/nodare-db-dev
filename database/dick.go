@@ -36,6 +36,7 @@ type XDICK struct {
 	// mainmux is not used anywhere but exists
 	//  for whatever reason we may find
 	//   subdicks can lock XDICK
+	booted  int64 // timestamp
 	mainmux sync.RWMutex
 	SubDICKs []*SubDICK
 	SubCount uint32
@@ -104,11 +105,11 @@ func (d *XDICK) expand(idx uint32, newSize int64) {
 	isrehashing := d.isRehashing(idx)
 	istablefull := d.mainDICK(idx).used > newSize
 	if isrehashing || istablefull {
-		d.logs.Info("SubDick [%d] expand return1 ! (newSize=%d isrehashing=%t istablefull=%t used=%d)", idx, newSize, isrehashing, istablefull, d.mainDICK(idx).used)
+		//d.logs.Debug("SubDick [%d] expand return1 ! (newSize=%d isrehashing=%t istablefull=%t used=%d)", idx, newSize, isrehashing, istablefull, d.mainDICK(idx).used)
 		return
 	}
 
-	d.logs.Info("SubDick [%d] expand newSize=%d isrehashing=%t istablefull=%t used=%d", idx, newSize, isrehashing, istablefull, d.mainDICK(idx).used)
+	//d.logs.Debug("SubDick [%d] expand newSize=%d isrehashing=%t istablefull=%t used=%d", idx, newSize, isrehashing, istablefull, d.mainDICK(idx).used)
 
 	nextSize := nextPower(newSize)
 	if d.mainDICK(idx).used >= nextSize {
@@ -179,7 +180,7 @@ func (d *XDICK) hasher(any string) uint64 {
 //
 // It returns an integer representing the index of the key in the dictionary.
 func (d *XDICK) keyIndex(idx uint32, key string) int {
-	d.logs.Debug("keyIndex(key=len(%d)='%s'", len(key), key)
+	//d.logs.Debug("keyIndex(key=len(%d)='%s'", len(key), key)
 	d.expandIfNeeded(idx)
 	hash := d.hasher(key) // TODO!FIXME: hash earlier?
 
@@ -194,7 +195,7 @@ func (d *XDICK) keyIndex(idx uint32, key string) int {
 		for entry := hashTable.table[index]; entry != nil; entry = entry.next {
 			loops2++
 			if entry.key == key {
-				d.logs.Info("keyIndex [%d] entry.key==key='%s' loops1=%d loops2=%d return -1", idx, key, loops1, loops2)
+				//d.logs.Debug("keyIndex [%d] entry.key==key='%s' loops1=%d loops2=%d return -1", idx, key, loops1, loops2)
 				return -1
 			}
 		}
@@ -203,7 +204,7 @@ func (d *XDICK) keyIndex(idx uint32, key string) int {
 			break
 		}
 	}
-	d.logs.Info("keyIndex [%d] key='%s' loops1=%d loops2=%d return index=%d", idx, key, loops1, loops2, index)
+	//d.logs.Debug("keyIndex [%d] key='%s' loops1=%d loops2=%d return index=%d", idx, key, loops1, loops2, index)
 	return index
 } // end func keyIndex
 
@@ -217,7 +218,7 @@ func (d *XDICK) keyIndex(idx uint32, key string) int {
 // - error: An error if the key already exists in the SubDICK.
 func (d *XDICK) add(idx uint32, key string, value interface{}) error {
 	X := d.keyIndex(idx, key)
-	d.logs.Debug("add(key=%d='%s' value='%#v' X=%d", len(key), key, value, X)
+	//d.logs.Debug("add(key=%d='%s' value='%#v' X=%d", len(key), key, value, X)
 
 	if X == -1 {
 		return fmt.Errorf(`unexpectedly found an entry with the same key when trying to add #{ %s } / #{ %s }`, key, value)
@@ -266,7 +267,7 @@ func (d *XDICK) rehash(idx uint32, n int) {
 	if !d.isRehashing(idx) {
 		return
 	}
-	d.logs.Info("SubDick [%d] rehash used=%d", idx, d.mainDICK(idx).used)
+	//d.logs.Debug("SubDick [%d] rehash used=%d", idx, d.mainDICK(idx).used)
 	for n > 0 && d.mainDICK(idx).used != 0 {
 		n--
 
@@ -421,7 +422,7 @@ func (d *XDICK) watchDog(idx uint32) {
 		ht1cap := len(d.SubDICKs[idx].hashTables[1].table)
 		d.logs.Info("watchDog [%d] ht0=%d/%d ht1=%d/%d", idx, ht0, ht0cap, ht1, ht1cap)
 		d.SubDICKs[idx].submux.RUnlock()
-		//d.logs.Debug("watchDog [%d] SubDICKs='\n   ---> %#v", idx, d.SubDICKs[idx])
+		////d.logs.Debug("watchDog [%d] SubDICKs='\n   ---> %#v", idx, d.SubDICKs[idx])
 	}
 } // end func watchDog
 

@@ -1,39 +1,21 @@
 package database
 
 import (
-	//"time"
 	"github.com/go-while/nodare-db-dev/logger"
+	"time"
 )
 
 type XDatabase struct {
 	XDICK *XDICK
+	BootT int64
 }
 
-func NewDICK(logs ilog.ILOG, sub_dicks uint32, /*, sdCh chan uint32, waitCh chan struct{}*/) *XDatabase {
-	//returnsubDICKs := make(chan []*SubDICK, 1)
-	xdick := NewXDICK(logs, sub_dicks/*, sdCh, returnsubDICKs*/)
+func NewDICK(logs ilog.ILOG, sub_dicks uint32) *XDatabase {
+	xdick := NewXDICK(logs, sub_dicks)
 	db := &XDatabase{
 		XDICK: xdick,
+		BootT: time.Now().Unix(),
 	}
-	/*
-	go func(returnsubDICKs <-chan []*SubDICK, db *XDatabase) {
-		db.XDICK.logger.Debug("NewDICK waits async to return subDICKs")
-		subDICKs := <-returnsubDICKs
-
-		db.XDICK.SubDICKs = subDICKs
-
-		// reads re-pushed value from NewXDICK
-		// which has been read from config and passed through sdCh
-		db.XDICK.SubCount = <-sdCh
-
-		for j := range db.XDICK.SubDICKs {
-			go db.XDICK.watchDog(uint32(j))
-		}
-
-		db.XDICK.logger.Debug("NewDICK set subDICKs=%d/%d notify waitCh", len(subDICKs), len(db.XDICK.SubDICKs))
-		waitCh <- struct{}{}
-	}(returnsubDICKs, db)
-	*/
 	return db
 }
 

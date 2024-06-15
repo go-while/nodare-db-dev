@@ -41,7 +41,6 @@ func (srv *XNDBServer) CreateMux() (*mux.Router) {
 
 func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request) {
 	nilheader(w)
-	srv.logs.Info("HandlerGetValByKey1")
 
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
