@@ -25,6 +25,7 @@ var (
 	items    int
 	rounds   int
 	parallel int
+	startint int
 	runtest  bool // runs a test after connecting
 	logfile  string
 
@@ -40,6 +41,7 @@ func main() {
 	flag.IntVar(&items, "items", 125000, "insert this many items per parallel worker")
 	flag.IntVar(&rounds, "rounds", 8, "test do N rounds")
 	flag.IntVar(&parallel, "parallel", 8, "limits parallel tests to N conns")
+	flag.IntVar(&startint, "startint", 1, "start test at int value N\n  both server and test-client especially may eat up lots of memory\n  so we can add 1billion k:v in steps")
 	flag.BoolVar(&runtest, "runtest", true, "runs the test after connecting")
 	flag.StringVar(&logfile, "logfile", "", "logfile for client")
 	flag.Parse()
@@ -94,7 +96,7 @@ func main() {
 	for r := 1; r <= rounds; r++ {
 		time.Sleep(1 * time.Millisecond) // mini delay to have them spawn in order
 
-		go func(cliHandler *client.CliHandler, opts *client.Options, r int, rounds int, items int, parChan chan struct{}, cliChan chan *client.Client, retchan chan map[string]string) {
+		go func(cliHandler *client.CliHandler, opts *client.Options, r int, rounds int, items int, parChan chan struct{}, cliChan chan *client.Client, retchan chan map[string]string, startint int) {
 			parChan <- struct{}{} // locks parallel
 			var netCli *client.Client
 			select {
@@ -116,8 +118,8 @@ func main() {
 			var resp string
 			for i := 1; i <= items; i++ {
 				// %010 leftpads i and r with 10 zeroes, like 17 => 0000000017
-				key := fmt.Sprintf("Atestkey%010d-r-%010d", i, r)
-				val := fmt.Sprintf("aTestVal%010d-r-%010d", i, r)
+				key := fmt.Sprintf("Atestkey%010d-r-%010d", startint, r)
+				val := fmt.Sprintf("aTestVal%010d-r-%010d", startint, r)
 				switch netCli.Mode {
 					case 1:
 						// http mode
@@ -131,12 +133,13 @@ func main() {
 					log.Fatalf("ERROR Set key='%s' => val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
 				}
 				testmap[key] = val
+				startint++
 			}
 			logs.Info("OK insert test round=%d/%d set=%d", r, rounds, len(testmap))
 			cliChan <- netCli // return netCli
 			retchan <- testmap
 			<-parChan // returns lock parallel
-		}(cliHandler, clientOpts, r, rounds, items, parChan, cliChan, retchan)
+		}(cliHandler, clientOpts, r, rounds, items, parChan, cliChan, retchan, startint)
 		//^^ go func
 	} // end insert worker
 
