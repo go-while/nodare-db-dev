@@ -258,7 +258,8 @@ readlines:
 			sock.logs.Info("Error [cli=%d] handleConn err='%v'", cli.id, err)
 			break readlines
 		}
-		recvbytes += len(line)
+		recvbytes += len(line)+2 // does not account line endings delimiter "\r\n" ! +2 does!
+
 		// clients sends: CMD|num_of_lines\r\n
 		// followed by multiple lines with BEL byte \x07 as delim of k:v pairs
 		// with a single line containing a ETB \x17 when done:
@@ -321,13 +322,13 @@ readlines:
 
 		case modeSET:
 			sock.logs.Debug("SOCKE [cli=%d] modeSET line='%#v'", cli.id, line)
-			// TODO process multiple Set lines here.
+			// process multiple Set lines here.
 
 			// receive first line with key at state 0
 			// receive second line with value at state 1
 			// if client sends \x07 (BEL) flip state to 0 and continue reading lines
-			// if client sends \x17 (ETB) set state=-1 AND mode=no_mode
-			// and send reply to client
+			// if client sends \x17 (ETB): process request, clear keys/vals and set mode=no_mode
+			// finally send reply to client
 
 			switch state {
 			case 0: // modeSET state 0 reads key
@@ -398,9 +399,7 @@ readlines:
 					}
 					sentbytes += n
 					keys, vals = nil, nil
-					mode = no_mode
-					state = -2
-					// state reverts when client sends next command
+					mode = no_mode // state reverts when client sends next command
 					continue readlines
 
 				case BEL:
@@ -412,7 +411,13 @@ readlines:
 
 		case modeGET:
 			sock.logs.Debug("SOCKET [cli=%d] modeGET line='%#v'", cli.id, line)
-			// TODO process multiple Get lines here.
+			// process multiple Get lines here.
+
+			// receive first line with key at state 0
+			// if client sends \x07 (BEL) flip state to 0 and continue reading key lines
+			// if client sends \x17 (ETB): process request, clear keys and set mode=no_mode
+			// finally send reply to client
+
 			switch state {
 
 			case 0: // modeGET state 0 reads key
@@ -465,7 +470,6 @@ readlines:
 						sentbytes += n
 						sock.logs.Debug("SOCKET [cli=%d] modeGet state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val.(string))
 					} // end for keys
-					state = -2
 					mode = no_mode
 					keys = nil
 
@@ -477,8 +481,13 @@ readlines:
 		case modeDEL:
 			sock.logs.Debug("SOCKET [cli=%d] modeDEL line='%#v'", cli.id, line)
 
+			// receive first line with key at state 0
+			// if client sends \x07 (BEL) flip state to 0 and continue reading key lines
+			// if client sends \x17 (ETB): process request, clear keys and set mode=no_mode
+			// finally send reply to client
+
 			switch state {
-			// TODO process multiple Del lines here.
+			// process multiple Del lines here.
 			case 0: // state 0 reads key
 				if len(line) > KEY_LIMIT {
 					cli.tp.PrintfLine(CAN)
@@ -526,6 +535,7 @@ readlines:
 				case BEL:
 					state-- // reset state to read more keys
 				} // end switch line
+				continue readlines
 			} // end switch state
 
 		case no_mode:
@@ -535,9 +545,8 @@ readlines:
 				vals = make(map[string]*string, 8)
 			}
 			// 1st arg is command
-			// 2nd arg is number of bytes client wants to send
-			// 		or run,wait for MemProfile
-			// len min: X|1  || 2nd is not '|' || line tooooooooooooooooo long
+			// 2nd arg is number of keys client wants to set/get/del
+			// len min: X|1  || 2nd is not '|'
 			if len(line) < 3 || line[1] != '|' {
 				// invalid format
 				cli.tp.PrintfLine(CAN)
@@ -599,6 +608,7 @@ readlines:
 				continue readlines
 
 			case Magic1:
+				// CAPTURE MEMORY PROFILE
 				// 		M|  <--- use default: run capture 30 sec instantly
 				// 		M|60,30  <--- runs 60 secs but waits 30 sec before
 				//
@@ -634,7 +644,7 @@ readlines:
 				cli.tp.PrintfLine("200 StartMemProfile run=%d wait=%d", runi, waiti)
 
 			case Magic2:
-				// start/stop cpu profiling
+				 // CAPTURE CPU PROFILE
 				if !socket {
 					break readlines
 				}
