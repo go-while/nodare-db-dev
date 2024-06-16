@@ -15,8 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	//"os/signal"
-	//"syscall"
 )
 
 type SOCKET struct {
@@ -321,7 +319,7 @@ readlines:
 			// TODO process multiple Add lines here.
 
 		case modeSET:
-			sock.logs.Debug("SOCKE [cli=%d] modeSET line='%#v'", cli.id, line)
+			sock.logs.Debug("SOCKET [cli=%d] modeSET line='%#v'", cli.id, line)
 			// process multiple Set lines here.
 
 			// receive first line with key at state 0
