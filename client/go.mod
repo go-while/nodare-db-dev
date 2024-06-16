@@ -2,7 +2,7 @@ module github.com/go-while/nodare-db-dev/client
 
 go 1.22.4
 
-require github.com/go-while/nodare-db-dev v0.0.0-20240616142349-b3fc6a4619d9
+require github.com/go-while/nodare-db-dev v0.0.0-20240616150133-f2ceb72b9f63
 
 require (
 	github.com/dchest/siphash v1.2.3 // indirect
