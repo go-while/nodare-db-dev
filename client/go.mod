@@ -2,13 +2,12 @@ module github.com/go-while/nodare-db-dev/client
 
 go 1.22.4
 
-require github.com/go-while/nodare-db-dev v0.0.0-20240615205326-60d2faddde6e
+require github.com/go-while/nodare-db-dev v0.0.0-20240615210407-e2c7f6ab7ee6
 
 require (
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-while/go-cpu-mem-profiler v0.0.0-20240612221627-856954a5fc83 // indirect
-	github.com/go-while/nodare-db/logger v0.0.0-20240613090224-8b267fb9e164 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
