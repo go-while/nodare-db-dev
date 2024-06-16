@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
-	"sync"
+	//"sync"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
