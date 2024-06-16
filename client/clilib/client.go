@@ -322,19 +322,21 @@ func (c *Client) SOCK_Get(key string, resp *string, nfk *string, found *bool) (e
 	}
 	//c.logs.Debug("SOCK_GET key='%s' reply='%#v'", key, reply)
 
-	switch string(reply[0]) {
-		case server.NUL:
-		*found = false
-		//c.logs.Debug("SOCK_GET key='%s' NUL")
-		// not found
-		if nfk != nil && len(reply) > 1 {
-			// extract the not-found-key (only with multiple requests)
-			*nfk = string(reply[1:])
-			return
+	if len(reply) > 0 {
+		switch string(reply[0]) {
+			case server.NUL:
+			*found = false
+			//c.logs.Debug("SOCK_GET key='%s' NUL")
+			// not found
+			if nfk != nil && len(reply) > 1 {
+				// extract the not-found-key (only with multiple requests)
+				*nfk = string(reply[1:])
+				return
+			}
 		}
+		*found = true
+		*resp = reply
 	}
-	*found = true
-	*resp = reply
 	return
 } // end func SOCK_Get
 
@@ -359,17 +361,18 @@ func (c *Client) SOCK_Del(key string, resp *string, nfk *string) (err error) {
 		return
 	}
 
-	switch string(reply[0]) {
-		case server.NUL:
-		// not found
-		if nfk != nil && len(reply) > 1 {
-			// extract the not-found-key (only with multiple requests)
-			*nfk = string(reply[1:])
-			return
+	if len(reply) > 0 {
+		switch string(reply[0]) {
+			case server.NUL:
+			// not found
+			if nfk != nil && len(reply) > 1 {
+				// extract the not-found-key (only with multiple requests)
+				*nfk = string(reply[1:])
+				return
+			}
 		}
+		*resp = reply
 	}
-
-	*resp = reply
 	return
 } // end func SOCK_Del
 
