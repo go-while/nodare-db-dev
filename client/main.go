@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"github.com/go-while/nodare-db-dev/client/clilib"
 	"github.com/go-while/nodare-db-dev/logger"
-	"github.com/go-while/nodare-db-dev/utils"
 	"log"
+	"encoding/hex"
 	"os"
 	"sync"
 	"time"
+	crand "crypto/rand"
 )
 
 var (
@@ -127,11 +128,14 @@ func main() {
 			var set int
 			for i := 1; i <= items; i++ {
 				var key, val, resp string
+				//var rkey, rval string
 				switch randomize {
 					case true:
 						// use random key:val and pass K:v to capturemaps to test later
-						key = fmt.Sprintf("%s-r%d-%d", utils.GenerateRandomString(keylen), r, startint)
-						val = fmt.Sprintf("%s-r%d-%d", utils.GenerateRandomString(vallen), r, startint)
+						DevUrandomString(keylen, &key)
+						DevUrandomString(vallen, &val)
+						//key = fmt.Sprintf("%s-r%d-%d", rkey, r, startint)
+						//val = fmt.Sprintf("%s-r%d-%d", rval, r, startint)
 					case false:
 						// use upcounting / startint key:val
 						// %010 leftpads startint and round with 10 zeroes, like 17 => 0000000017
@@ -372,3 +376,15 @@ final:
 	<-stop_chan
 
 } // end func main:client/main.go
+
+func DevUrandomString(length int, retstr *string) {
+	uselen := length / 2
+	if uselen <= 0 {
+		uselen = 1
+	}
+	b := make([]byte, uselen)
+	n, err := crand.Read(b)
+	*retstr = hex.EncodeToString(b)
+	//log.Printf("DevUrandomString read=%d n=%d err='%v' retstr='%s'=%d wanted=%d", len(b), n, err, *retstr, len(*retstr), length)
+	// ignores any errors, will fail anyways later ;)
+} // end func DevUrandomString
