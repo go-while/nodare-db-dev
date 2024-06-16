@@ -130,13 +130,13 @@ func main() {
 				switch randomize {
 					case true:
 						// use random key:val and pass K:v to capturemaps to test later
-						key = utils.GenerateRandomString(keylen) // TODO! hardcoded: add key_len flag
-						val = utils.GenerateRandomString(vallen) // TODO! hardcoded: add val_len flag
-					default:
+						key = utils.GenerateRandomString(keylen)
+						val = utils.GenerateRandomString(vallen)
+					case false:
 						// use upcounting / startint key:val
 						// %010 leftpads startint and round with 10 zeroes, like 17 => 0000000017
-						key = fmt.Sprintf("Atestkey%010d-r-%010d", startint, r)
-						val = fmt.Sprintf("aTestVal%010d-r-%010d", startint, r)
+						key = fmt.Sprintf("%d_Atestkey%010d-r-%010d", startint, startint, r)
+						val = fmt.Sprintf("%d_aTestVal%010d-r-%010d",startint, startint, r)
 				}
 
 				switch netCli.Mode {
@@ -200,7 +200,7 @@ func main() {
 				var netCli *client.Client
 				select {
 					case netCli = <- cliChan:
-						logs.Info("insert test: got open netCli")
+						logs.Info("check test: got open netCli")
 						// pass
 					default:
 						// no conn in cliChan? establish new!
@@ -216,8 +216,8 @@ func main() {
 				for i := 1; i <= items; i++ {
 					var checkkey, checkval, retval, nfk string
 					var found bool
-					checkkey = fmt.Sprintf("Atestkey%010d-r-%010d", startint, r)
-					checkval = fmt.Sprintf("aTestVal%010d-r-%010d", startint, r)
+					checkkey = fmt.Sprintf("%d_Atestkey%010d-r-%010d", startint, startint, r)
+					checkval = fmt.Sprintf("%d_aTestVal%010d-r-%010d", startint, startint, r)
 					switch netCli.Mode {
 						case 1:
 							// http mode
@@ -257,27 +257,22 @@ func main() {
 				break
 			}
 		}
-	} // end if randomize
+	} // end if !randomize
 
 	if randomize {
 		logs.Info("wait for insert test to return randomized maps to test K:V")
 		var capturemaps []map[string]string
-	forever:
 		for {
-			select {
-			case testmap := <-MapRetChan:
-				capturemaps = append(capturemaps, testmap)
-				logs.Info("Got a testmap have=%d want=%d", len(capturemaps), rounds)
-			default:
-				if len(capturemaps) == rounds {
-					logs.Info("OK all testmaps returned, checking now...")
-					break forever
-				}
+			testmap := <-MapRetChan
+			capturemaps = append(capturemaps, testmap)
+			logs.Info("Got a testmap have=%d want=%d", len(capturemaps), rounds)
+			if len(capturemaps) == rounds {
+				logs.Info("OK all testmaps returned, checking now...")
+				break
 			}
 		} // end for wait capture testmaps
 
 		// check all testmaps
-		//RetIntChan = make(chan int, len(capturemaps))
 		for i, testmap := range capturemaps {
 			r := i+1
 			go func(parChan chan struct{}, cliChan chan *client.Client, RetIntChan chan int, GetDoneChan chan struct{}, testmap map[string]string, r int) {
@@ -298,12 +293,9 @@ func main() {
 				}
 				var checked int
 				var err error
-				var val string
-				var nfk string
-				var found bool
-
 				for k, v := range testmap {
-
+					var val, nfk string
+					var found bool
 					switch netCli.Mode {
 						case 1:
 							// http mode
@@ -314,10 +306,10 @@ func main() {
 							err = netCli.SOCK_Get(k, &val, &nfk, &found) // socket Get key: return val is passed as pointer!
 					}
 					if err != nil {
-						log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", k, err, netCli.Mode, nfk, found)
+						log.Fatalf("ERROR randomize ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", k, err, netCli.Mode, nfk, found)
 					}
 					if !found || val != v {
-						log.Fatalf("ERROR verify k='%s' v='%s' != val='%s' nfk='%s' found=%t", k, v, val, nfk, found)
+						log.Fatalf("FAILED verify randomize k='%s' v='%s' != val='%s' nfk='%s' found=%t checked=%d", k, v, val, nfk, found, checked)
 						os.Exit(1)
 					}
 					checked++
@@ -346,7 +338,6 @@ func main() {
 	} // end if randomize
 
 	time.Sleep(time.Second)
-
 
 	// sums all checks
 	checked := 0
