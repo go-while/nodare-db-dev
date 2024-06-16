@@ -1,4 +1,4 @@
-// provides a go module to establish connection to dare-db
+// provides a go module to establish connection to nodare-db
 package client
 
 import (
