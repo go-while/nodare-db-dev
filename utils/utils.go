@@ -15,7 +15,7 @@ var uniqRandom sync.Mutex //
 
 func GenerateRandomString(length int) string {
 	uniqRandom.Lock()
-	defer uniqRandom.Lock()
+	defer uniqRandom.Unlock()
 	time.Sleep(time.Nanosecond)
 	var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	b := make([]byte, length)
