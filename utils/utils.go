@@ -11,12 +11,12 @@ import (
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-var uniqRandom sync.Mutex //
+//var uniqRandom sync.Mutex //
 
 func GenerateRandomString(length int) string {
-	uniqRandom.Lock()
-	defer uniqRandom.Unlock()
-	time.Sleep(time.Nanosecond)
+	//uniqRandom.Lock()
+	//defer uniqRandom.Unlock()
+	//time.Sleep(time.Nanosecond)
 	var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	b := make([]byte, length)
 	for i := range b {
