@@ -1,6 +1,42 @@
 # noDare-DB
 
-**noDare-DB** is a project that provides an in-memory database utilizing Redis-inspired hashtables implemented in Go [here](https://github.com/dmarro89/go-redis-hashtable). It offers a lightweight and efficient solution for storing data in memory and accessing it through simple HTTP operations.
+## Real World Benchmark
+### @ Intel Nuc i7-10710U (4.2 Ghz boost)
+
+### Mode 1 HTTP
+```
+2024/06/16 23:30:15 [INFO] insert finished: took 25 sec! checking...
+2024/06/16 23:30:30 [INFO] Check done! Test Result:
+{
+ parallel: 8
+ total: 1000000
+ checked: 1000000
+ items/round: 125000
+ rounds: 8
+ insert: 25 sec (40000/sec)
+ check: 15 sec (66666/sec)
+ total: 40 sec
+}
+```
+
+
+### Mode 2 Raw TCP
+```
+2024/06/15 23:40:38 [INFO] insert finished: took 6 sec! checking...
+2024/06/15 23:40:43 [INFO] Check done! Test Result:
+{
+ parallel: 8
+ total: 1000000
+ checked: 1000000
+ items/round: 125000
+ rounds: 8
+ insert: 6 sec (166666/sec)
+ check: 5 sec (200000/sec)
+ total: 11 sec
+}
+```
+
+**noDare-DB** is a fork of dare-db: a project that provides an in-memory database utilizing Redis-inspired hashtables implemented in Go [here](https://github.com/dmarro89/go-redis-hashtable). It offers a lightweight and efficient solution for storing data in memory and accessing it through simple HTTP operations.
 
 ## Project Purpose
 
