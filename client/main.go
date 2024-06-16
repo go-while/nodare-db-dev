@@ -130,8 +130,8 @@ func main() {
 				switch randomize {
 					case true:
 						// use random key:val and pass K:v to capturemaps to test later
-						key = utils.GenerateRandomString(keylen)
-						val = utils.GenerateRandomString(vallen)
+						key = fmt.Sprintf("%s-r%d-%d", utils.GenerateRandomString(keylen), r, startint)
+						val = fmt.Sprintf("%s-r%d-%d", utils.GenerateRandomString(vallen), r, startint)
 					case false:
 						// use upcounting / startint key:val
 						// %010 leftpads startint and round with 10 zeroes, like 17 => 0000000017
@@ -153,9 +153,8 @@ func main() {
 				}
 				if randomize {
 					testmap[key] = val
-				} else {
-					startint++
 				}
+				startint++
 				set++
 			} // end for items
 			if randomize {
