@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/go-while/nodare-db-dev/client/clilib"
 	"github.com/go-while/nodare-db-dev/logger"
+	"github.com/go-while/nodare-db-dev/utils"
 	"log"
 	"os"
 	"sync"
@@ -26,9 +27,11 @@ var (
 	rounds   int
 	parallel int
 	startint int
-	runtest  bool // runs a test after connecting
+	runtest  bool // runs a client internal test after connecting (not implemented)
+	randomize  bool
 	logfile  string
-
+	keylen  int
+	vallen  int
 )
 
 func main() {
@@ -43,6 +46,9 @@ func main() {
 	flag.IntVar(&parallel, "parallel", 8, "limits parallel tests to N conns")
 	flag.IntVar(&startint, "startint", 1, "start test at int value N\n  both server and test-client especially may eat up lots of memory\n  so we can add 1billion k:v in steps")
 	flag.BoolVar(&runtest, "runtest", true, "runs the test after connecting")
+	flag.BoolVar(&randomize, "random", true, "if true uses random key:vals and caputures these in maps\n  so we can check them later. eats loads of memory!")
+	flag.IntVar(&keylen, "keylen", 16, "set length of key. used with -random=true")
+	flag.IntVar(&vallen, "vallen", 16, "set length of val. used with -random=true")
 	flag.StringVar(&logfile, "logfile", "", "logfile for client")
 	flag.Parse()
 
@@ -86,18 +92,21 @@ func main() {
 		Logs:       logs,
 	}
 
-	parChan := make(chan struct{}, parallel)
-	retchan := make(chan map[string]string, 1)
 	cliChan := make(chan *client.Client, parallel)
+	parChan := make(chan struct{}, parallel)
+	MapRetChan := make(chan map[string]string, rounds)
+	SetDoneChan := make(chan struct{}, rounds)
+	GetDoneChan := make(chan struct{}, rounds)
+	RetIntChan := make(chan int, rounds)
 	start := time.Now().Unix()
+	var insert_end int64
 
-	logs.Debug("starting insert")
 	// launch insert tests
 	for r := 1; r <= rounds; r++ {
 		time.Sleep(1 * time.Millisecond) // mini delay to have them spawn in order
-
-		go func(cliHandler *client.CliHandler, opts *client.Options, r int, rounds int, items int, parChan chan struct{}, cliChan chan *client.Client, retchan chan map[string]string, startint int) {
+		go func(cliHandler *client.CliHandler, opts *client.Options, r int, rounds int, items int, parChan chan struct{}, cliChan chan *client.Client, MapRetChan chan map[string]string, startint int, randomize bool, SetDoneChan chan struct{}, keylen int, vallen int) {
 			parChan <- struct{}{} // locks parallel
+			logs.Info("parChan got lock: start insert test r=%d/%d", r, rounds)
 			var netCli *client.Client
 			select {
 				case netCli = <- cliChan:
@@ -115,11 +124,21 @@ func main() {
 			testmap := make(map[string]string)
 			logs.Info("Launch insert test round=%d/%d", r, rounds)
 			var err error
-			var resp string
+			var set int
 			for i := 1; i <= items; i++ {
-				// %010 leftpads i and r with 10 zeroes, like 17 => 0000000017
-				key := fmt.Sprintf("Atestkey%010d-r-%010d", startint, r)
-				val := fmt.Sprintf("aTestVal%010d-r-%010d", startint, r)
+				var key, val, resp string
+				switch randomize {
+					case true:
+						// use random key:val and pass K:v to capturemaps to test later
+						key = utils.GenerateRandomString(keylen) // TODO! hardcoded: add key_len flag
+						val = utils.GenerateRandomString(vallen) // TODO! hardcoded: add val_len flag
+					default:
+						// use upcounting / startint key:val
+						// %010 leftpads startint and round with 10 zeroes, like 17 => 0000000017
+						key = fmt.Sprintf("Atestkey%010d-r-%010d", startint, r)
+						val = fmt.Sprintf("aTestVal%010d-r-%010d", startint, r)
+				}
+
 				switch netCli.Mode {
 					case 1:
 						// http mode
@@ -132,81 +151,210 @@ func main() {
 				if err != nil {
 					log.Fatalf("ERROR Set key='%s' => val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
 				}
-				testmap[key] = val
-				startint++
+				if randomize {
+					testmap[key] = val
+				} else {
+					startint++
+				}
+				set++
+			} // end for items
+			if randomize {
+				logs.Info("OK insert random test round=%d/%d set=%d items=%d testmap=%d", r, rounds, set, items, len(testmap))
+			} else {
+				logs.Info("OK insert upcunt test round=%d/%d set=%d items=%d", r, rounds, set, items)
 			}
-			logs.Info("OK insert test round=%d/%d set=%d", r, rounds, len(testmap))
 			cliChan <- netCli // return netCli
-			retchan <- testmap
+			if randomize {
+				MapRetChan <- testmap
+			}
+			SetDoneChan <- struct{}{}
 			<-parChan // returns lock parallel
-		}(cliHandler, clientOpts, r, rounds, items, parChan, cliChan, retchan, startint)
+			logs.Debug("<- insert test r=%d returned parChan", r)
+		}(cliHandler, clientOpts, r, rounds, items, parChan, cliChan, MapRetChan, startint, randomize, SetDoneChan, keylen, vallen)
 		//^^ go func
+		// wait for setDone
 	} // end insert worker
 
-	logs.Info("wait for insert test to return maps to test K:V")
-	var capturemaps []map[string]string
-forever:
+	// wait
+	logs.Info("wait for SetDoneChan")
+	setdone := 0
 	for {
-		select {
-		case testmap := <-retchan:
-			capturemaps = append(capturemaps, testmap)
-			logs.Info("Got a testmap have=%d want=%d", len(capturemaps), rounds)
-		default:
-			if len(capturemaps) == rounds {
-				logs.Info("OK all testmaps returned, checking now...")
-				break forever
-			}
-			time.Sleep(time.Millisecond * 100)
+		<- SetDoneChan
+		setdone++
+		if setdone == rounds {
+			logs.Info("OK setdone=%d rounds=%d", setdone, rounds)
+			insert_end = time.Now().Unix()
+			logs.Info("insert finished (random=%t): took %d sec! checking...", randomize, insert_end-start)
+			break
 		}
-	} // end for wait capture testmaps
-	insert_end := time.Now().Unix()
-	logs.Info("insert finished: took %d sec! checking...", insert_end-start)
+	}
 
-	// check all testmaps
-	retintChan := make(chan int, len(capturemaps))
-	for _, testmap := range capturemaps {
-		go func(parChan chan struct{}, cliChan chan *client.Client, retintChan chan int, testmap map[string]string) {
-			parChan <- struct{}{} // locks
-			netCli := <-cliChan // gets open netCli
-			checked := 0
-			var err error
-			var val string
-			var nfk string
-			var found bool
+	// start checks
+	if !randomize {
+		logs.Info("start check !randomize")
 
-			for k, v := range testmap {
-
-				switch netCli.Mode {
-					case 1:
-						// http mode
-						err = netCli.HTTP_Get(k, &val, &found) // http Get Key: return val is passed as pointer!
-					case 2:
-						// sock mode
-						// TODO! add test for GetMany
-						err = netCli.SOCK_Get(k, &val, &nfk, &found) // socket Get key: return val is passed as pointer!
+		for r := 1; r <= rounds; r++ {
+			time.Sleep(1 * time.Millisecond) // mini delay to have them spawn in order
+			go func(cliHandler *client.CliHandler, opts *client.Options, r int, rounds int, items int, parChan chan struct{}, cliChan chan *client.Client, MapRetChan chan map[string]string, startint int, randomize bool, SetDoneChan chan struct{}, GetDoneChan chan struct{}) {
+				parChan <- struct{}{} // locks parallel
+				var netCli *client.Client
+				select {
+					case netCli = <- cliChan:
+						logs.Info("insert test: got open netCli")
+						// pass
+					default:
+						// no conn in cliChan? establish new!
+						newnetCli, err := cliHandler.NewCli(clientOpts)
+						if newnetCli == nil || err != nil {
+							logs.Error("ERROR netCli='%v' err='%v'", newnetCli, err)
+							return
+						}
+						netCli = newnetCli
 				}
-				if err != nil {
-					log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", k, err, netCli.Mode, nfk, found)
-				}
-				if !found || val != v {
-					log.Fatalf("ERROR verify k='%s' v='%s' != val='%s' nfk='%s' found=%t", k, v, val, nfk, found)
-					os.Exit(1)
-				}
+				var err error
+				var checked int
+				for i := 1; i <= items; i++ {
+					var checkkey, checkval, retval, nfk string
+					var found bool
+					checkkey = fmt.Sprintf("Atestkey%010d-r-%010d", startint, r)
+					checkval = fmt.Sprintf("aTestVal%010d-r-%010d", startint, r)
+					switch netCli.Mode {
+						case 1:
+							// http mode
+							err = netCli.HTTP_Get(checkkey, &retval, &found) // http Get Key: return val is passed as pointer!
+						case 2:
+							// sock mode
+							// TODO! add test for GetMany
+							err = netCli.SOCK_Get(checkkey, &retval, &nfk, &found) // socket Get key: return val is passed as pointer!
+					}
+					if err != nil {
+						log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", checkkey, err, netCli.Mode, nfk, found)
+					}
+					if !found || retval != checkval {
+						log.Fatalf("ERROR verify checkkey='%s' checkval='%s' != retval='%s' nfk='%s' found=%t", checkkey, checkval, retval, nfk, found)
+						os.Exit(1)
+					}
+					startint++
+					checked++
+				} // end for items
+				cliChan <- netCli // return netCli
+				GetDoneChan <- struct{}{}
+				RetIntChan <- checked // returns checked amount to sum later
+				<- parChan
+				logs.Info("<- check test !random r=%d returned parChan", r)
+			}(cliHandler, clientOpts, r, rounds, items, parChan, cliChan, MapRetChan, startint, randomize, SetDoneChan, GetDoneChan) // end go func
+		} // end for rounds
 
-				checked++
-			} // end for testmap
-			cliChan <- netCli // return netCli to other rounds
-			retintChan <- checked // returns checked amount to sum later
-			<-parChan // returns lock
-		}(parChan, cliChan, retintChan, testmap)
-	} // end for check test maps
+		// wait
+		logs.Info("wait for GetDoneChan !random")
+		getdone := 0
+		for {
+			<- GetDoneChan
+			getdone++
+			logs.Info("wait GetDoneChan random=%t getdone=%d / rounds=%d", randomize, getdone, rounds)
+			if getdone == rounds {
+				logs.Info("OK getdone=%d rounds=%d", getdone, rounds)
+				break
+			}
+		}
+	} // end if randomize
+
+	if randomize {
+		logs.Info("wait for insert test to return randomized maps to test K:V")
+		var capturemaps []map[string]string
+	forever:
+		for {
+			select {
+			case testmap := <-MapRetChan:
+				capturemaps = append(capturemaps, testmap)
+				logs.Info("Got a testmap have=%d want=%d", len(capturemaps), rounds)
+			default:
+				if len(capturemaps) == rounds {
+					logs.Info("OK all testmaps returned, checking now...")
+					break forever
+				}
+			}
+		} // end for wait capture testmaps
+
+		// check all testmaps
+		//RetIntChan = make(chan int, len(capturemaps))
+		for i, testmap := range capturemaps {
+			r := i+1
+			go func(parChan chan struct{}, cliChan chan *client.Client, RetIntChan chan int, GetDoneChan chan struct{}, testmap map[string]string, r int) {
+				parChan <- struct{}{} // locks
+				var netCli *client.Client
+				select {
+					case netCli = <- cliChan:
+						logs.Info("check test: got open netCli")
+						// pass
+					default:
+						// no conn in cliChan? establish new!
+						newnetCli, err := cliHandler.NewCli(clientOpts)
+						if newnetCli == nil || err != nil {
+							logs.Error("ERROR netCli='%v' err='%v'", newnetCli, err)
+							return
+						}
+						netCli = newnetCli
+				}
+				var checked int
+				var err error
+				var val string
+				var nfk string
+				var found bool
+
+				for k, v := range testmap {
+
+					switch netCli.Mode {
+						case 1:
+							// http mode
+							err = netCli.HTTP_Get(k, &val, &found) // http Get Key: return val is passed as pointer!
+						case 2:
+							// sock mode
+							// TODO! add test for GetMany
+							err = netCli.SOCK_Get(k, &val, &nfk, &found) // socket Get key: return val is passed as pointer!
+					}
+					if err != nil {
+						log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", k, err, netCli.Mode, nfk, found)
+					}
+					if !found || val != v {
+						log.Fatalf("ERROR verify k='%s' v='%s' != val='%s' nfk='%s' found=%t", k, v, val, nfk, found)
+						os.Exit(1)
+					}
+					checked++
+				} // end for testmap
+				cliChan <- netCli // return netCli to other rounds
+				RetIntChan <- checked // returns checked amount to sum later
+				GetDoneChan <-struct{}{}
+				<-parChan // returns lock
+				logs.Info("<- check test random r=%d returned parChan", r)
+			}(parChan, cliChan, RetIntChan, GetDoneChan, testmap, r)
+		} // end for check test maps
+
+		// wait
+		logs.Info("wait for GetDoneChan random")
+		getdone := 0
+		for {
+			<- GetDoneChan
+			getdone++
+			logs.Info("wait GetDoneChan random=%t getdone=%d / rounds=%d", randomize, getdone, rounds)
+			if getdone == rounds {
+				logs.Info("OK getdone=%d rounds=%d", getdone, rounds)
+				break
+			}
+		}
+
+	} // end if randomize
+
+	time.Sleep(time.Second)
+
 
 	// sums all checks
 	checked := 0
+	logs.Info("wait to return checked")
 final:
 	for {
 		select {
-		case aint := <-retintChan:
+		case aint := <-RetIntChan:
 			checked += aint
 			if checked == items*rounds {
 				break final
@@ -214,8 +362,22 @@ final:
 		}
 	}
 	test_end := time.Now().Unix()
+	diff1 := insert_end-start
+	diff2 := test_end-start
+	if diff1 <= 0 || diff2 <= 0 {
+		logs.Info("Check done!\n but calculating a benchmark value would result in division by zero error ....\n   just because it was tooo fast!\n    if you have not seen any other error:\n     everything went smoothly!")
+	} else {
 	logs.Info("Check done! Test Result:\n{\n parallel: %d\n total: %d\n checked: %d\n items/round: %d\n rounds: %d\n insert: %d sec (%d/sec)\n check: %d sec (%d/sec)\n total: %d sec\n}",
-											parallel, items*rounds, checked, items, rounds, insert_end-start, int64(checked)/(insert_end-start), test_end-insert_end, int64(checked)/(test_end-insert_end), test_end-start)
+											parallel,
+											items*rounds,
+											checked,
+											items,
+											rounds,
+											insert_end-start,
+											int64(checked)/(insert_end-start),
+											test_end-insert_end, int64(checked)/(test_end-insert_end),
+											test_end-start)
+	}
 	logs.Info("infinite wait on stop_chan")
 	<-stop_chan
 
