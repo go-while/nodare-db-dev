@@ -6,13 +6,18 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"sync"
 )
 
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var uniqRandom sync.Mutex //
+
 func GenerateRandomString(length int) string {
-
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	uniqRandom.Lock()
+	defer uniqRandom.Lock()
+	time.Sleep(time.Nanosecond)
 	var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[seededRand.Intn(len(charset))]
