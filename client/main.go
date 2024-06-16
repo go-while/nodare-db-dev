@@ -383,7 +383,7 @@ func DevUrandomString(length int, retstr *string) {
 		uselen = 1
 	}
 	b := make([]byte, uselen)
-	n, err := crand.Read(b)
+	_, _ := crand.Read(b)
 	*retstr = hex.EncodeToString(b)
 	//log.Printf("DevUrandomString read=%d n=%d err='%v' retstr='%s'=%d wanted=%d", len(b), n, err, *retstr, len(*retstr), length)
 	// ignores any errors, will fail anyways later ;)
