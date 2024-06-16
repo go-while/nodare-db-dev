@@ -394,7 +394,7 @@ func (d *XDICK) del(idx uint32, key string) *DickEntry {
 
 func (d *XDICK) watchDog(idx uint32) {
 	//log.Printf("Booted Watchdog [%d]", idx)
-
+	return
 	for {
 		time.Sleep(time.Second) // TODO!FIXME setting: watchdog_timer
 
