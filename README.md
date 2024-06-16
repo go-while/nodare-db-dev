@@ -3,8 +3,39 @@
 ## Real World Benchmark
 ### @ Intel Nuc i7-10710U (4.2 Ghz boost)
 
+```
+# set/get with verify: Benchmark @ v0.0.2
+
+./client -random=true
+{
+ parallel: 8
+ total: 1000000
+ checked: 1000000
+ items/round: 125000
+ rounds: 8
+ insert: 11 sec (90909/sec)
+ check: 10 sec (100000/sec)
+ total: 21 sec
+}
+
+./client -random=false
+{
+ parallel: 8
+ total: 1000000
+ checked: 1000000
+ items/round: 125000
+ rounds: 8
+ insert: 10 sec (100000/sec)
+ check: 11 sec (90909/sec)
+ total: 21 sec
+}
+
+with my cpu clock limited to 2.00 Ghz =)
+```
+
 ### Mode 1 HTTP
 ```
+./client -mode=1
 2024/06/16 23:30:15 [INFO] insert finished: took 25 sec! checking...
 2024/06/16 23:30:30 [INFO] Check done! Test Result:
 {
@@ -22,6 +53,7 @@
 
 ### Mode 2 Raw TCP
 ```
+./client -mode=2
 2024/06/15 23:40:38 [INFO] insert finished: took 6 sec! checking...
 2024/06/15 23:40:43 [INFO] Check done! Test Result:
 {
@@ -35,6 +67,7 @@
  total: 11 sec
 }
 ```
+
 
 **noDare-DB** is a fork of dare-db: a project that provides an in-memory database utilizing Redis-inspired hashtables implemented in Go [here](https://github.com/dmarro89/go-redis-hashtable). It offers a lightweight and efficient solution for storing data in memory and accessing it through simple HTTP operations.
 
