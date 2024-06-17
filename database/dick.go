@@ -46,7 +46,7 @@ type SubDICK struct {
 	logs       ilog.ILOG
 }
 
-func NewXDICK(logs ilog.ILOG, sub_dicks int) *XDICK {
+func NewXDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDICK {
 	var mainmux sync.RWMutex
 	// create sub_dicks
 	depth := 0
@@ -66,6 +66,7 @@ func NewXDICK(logs ilog.ILOG, sub_dicks int) *XDICK {
 		pcas: pcashash.New(),
 		mainmux:  mainmux,
 		SubDepth: depth,
+		HashMode: hashmode, // must not change on runtime
 		logs:     logs,
 	}
 	// creates sub_dicks by depth value
