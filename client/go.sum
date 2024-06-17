@@ -8,10 +8,8 @@ github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nos
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
 github.com/go-while/go-cpu-mem-profiler v0.0.0-20240612221627-856954a5fc83 h1:vehfiL7LsK8bJQZdVuJxcMem4AP2HwPEQ8orUUnIA+E=
 github.com/go-while/go-cpu-mem-profiler v0.0.0-20240612221627-856954a5fc83/go.mod h1:31AY7BccUb7qvKi4LQCwLOYsvcza9TdQtl/zHEIOcRE=
-github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240617221542-e336839070ea h1:9XLf2v4hPnN4xpa2tId8e7CKq810SRvZDfayvXZpnSE=
-github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240617221542-e336839070ea/go.mod h1:jO213XvFDUNfACOulHNYy1i3fMsvw65ZwMMKng5kDfE=
-github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240617223134-34e83e7a7451 h1:V3SvRElOtLG4IpNB86wcI92hcqCGQJUMVLxd5sYj/qs=
-github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240617223134-34e83e7a7451/go.mod h1:jO213XvFDUNfACOulHNYy1i3fMsvw65ZwMMKng5kDfE=
+github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240617223251-a706b6d1388b h1:6XzF3WxX/U6LQgD+3OA8HZFNNGNjShzNeiznsToMKxo=
+github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240617223251-a706b6d1388b/go.mod h1:jO213XvFDUNfACOulHNYy1i3fMsvw65ZwMMKng5kDfE=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/gorilla/mux v1.8.1 h1:TuBL49tXwgrFYWhqrNgrUNEY92u81SPhu7sTdzQEiWY=
