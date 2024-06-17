@@ -2,13 +2,13 @@ package database
 
 import (
 	"encoding/binary"
-	//"fmt"
+	"fmt"
 	"github.com/go-while/nodare-db-dev/logger"
 	pcashash "github.com/go-while/nodare-db-dev/pcas_hash"
 	"hash/fnv"
 	"math/rand"
 	"hash/crc32"
-	"strconv"
+	//"strconv"
 	"sync"
 	"time"
 )
@@ -34,12 +34,13 @@ type XDICK struct {
 	mainmux  sync.RWMutex
 	SubDICKs map[string]*SubDICK // key=string=idx
 	SubDepth int
+	HashMode int
 	logs     ilog.ILOG
 	pcas     *pcashash.Hash // hash go objects
 }
 
 type SubDICK struct {
-	parent     *sync.RWMutex
+	parent     sync.RWMutex
 	submux     sync.RWMutex
 	dickTable  *DickTable
 	logs       ilog.ILOG
@@ -74,7 +75,7 @@ func NewXDICK(logs ilog.ILOG, sub_dicks int) *XDICK {
 	logs.Debug("Create sub_dicks=%d comb=%d", sub_dicks, len(combinations))
 	for _, idx := range combinations {
 		subDICK := &SubDICK{
-			parent:     &mainmux,
+			parent:     mainmux,
 			dickTable: NewDickTable(INITIAL_SIZE),
 			//logs:       logs,
 		}
@@ -89,27 +90,38 @@ func NewXDICK(logs ilog.ILOG, sub_dicks int) *XDICK {
 	return xdick
 }
 
-func generateCRC32AsString(input string) string {
+func generateCRC32AsString(input string, sd int, output *string) {
 	byteSlice := []byte(input)
 	hash := crc32.NewIEEE()
 	hash.Write(byteSlice)
 	checksum := hash.Sum32()
-	checksumStr := strconv.FormatUint(uint64(checksum), 16)
-	return checksumStr
+	//checksumStr := strconv.FormatUint(uint64(checksum), 16)
+	*output = fmt.Sprintf("%04x", checksum)[:sd]
 }
 
-func generateFNV1aHash(input string) string {
+func generateFNV1aHash(input string, sd int, output *string) {
 	hash := fnv.New32a()
 	hash.Write([]byte(input))
 	hashValue := hash.Sum32()
-	hashValueStr := strconv.FormatUint(uint64(hashValue), 16)
-	return hashValueStr
+	//hashValueStr := strconv.FormatUint(uint64(hashValue), 16)
+	*output = fmt.Sprintf("%04x", hashValue)[:sd]
 }
 
 func (d *XDICK) KeyIndex(key string, idx *string) {
-	*idx = generateCRC32AsString(key)[:d.SubDepth]
-	//*idx = generateFNV1aHash(key)[:d.SubDepth]
-	//d.logs.Debug("key=%s idx='%s'", key, *idx)
+	d.HashMode = 1
+	// generate a quick hash and cuts N chars to divide into sub_dicks 0__-f__
+	switch d.HashMode {
+		case 1:
+		// use PCAS
+		*idx = fmt.Sprintf("%04x", pcashash.String(key), d.SubDepth)[:d.SubDepth]
+		case 2:
+		// use CRC32
+			generateCRC32AsString(key, d.SubDepth, idx)//[:d.SubDepth]
+		case 3:
+		// uses FNV1
+			generateFNV1aHash(key, d.SubDepth, idx)//[:d.SubDepth]
+	}
+	d.logs.Debug("key=%s idx='%#v'", key, *idx)
 }
 
 func (d *XDICK) set(key string, value string, overwrite bool) bool {

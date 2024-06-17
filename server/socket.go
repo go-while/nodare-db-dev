@@ -248,6 +248,7 @@ func (sock *SOCKET) handleSocketConn(cli *CLI, raddr string, socket bool) {
 	var vals map[string]*string
 	var sentbytes int
 	var recvbytes int
+	var overwrite bool
 
 readlines:
 	for {
@@ -274,12 +275,16 @@ readlines:
 		//		aValue03forThisList\r\n
 		//		\x17\r\n
 
-		// 	SET|1\r\n
+		// SET needs "$OV" as overwrite flag
+		// overwrite true = const Substitute "ACK" or \x05
+		// overwrite false = const Substitute "NAK" or \x15
+
+		// 	SET|1|$OF\r\n
 		//		AveryLooongKey11\r\n
 		//		AveryLongValue\r\n
 		//		\x17\r\n
 
-		// 	SET|3\r\n
+		// 	SET|3|$OF\r\n
 		// 		AveryLooongKey11\r\n
 		// 		AveryLongValue\r\n
 		// 		\x07\r\n
@@ -370,7 +375,7 @@ readlines:
 					setloopkeys:
 					for _, akey := range keys {
 						val := vals[akey]
-						ok := sock.db.Set(akey, *val, true) // default always overwrites
+						ok := sock.db.Set(akey, *val, overwrite) // default always overwrites
 						if !ok {
 							sock.logs.Error("SOCKET [cli=%d] modeSET state2 set !ok", cli.id)
 							// reply error
@@ -544,6 +549,7 @@ readlines:
 			}
 			// 1st arg is command
 			// 2nd arg is number of keys client wants to set/get/del
+			// 3rt arg is $OV overwrite flag
 			// len min: X|1  || 2nd is not '|'
 			if len(line) < 3 || line[1] != '|' {
 				// invalid format
@@ -552,8 +558,8 @@ readlines:
 			}
 			state = -1
 			// no mode is set: find command and set mode to accept reading of multiple lines
-			split := strings.Split(line, "|")[0:2]
-			if len(split) < 2 {
+			split := strings.Split(line, "|")
+			if len(split) < 3 || len(split[2]) != 1 {
 				cli.tp.PrintfLine(CAN)
 				break readlines
 			}
@@ -578,6 +584,16 @@ readlines:
 					// abnormal: str2num failed parsing
 					// or client send really a 0
 					break readlines
+				}
+				//ovflag := string(split[2])
+				switch split[2] {
+					case ACK:
+						overwrite = true
+					case NAK:
+						overwrite = false
+					default:
+						cli.tp.PrintfLine(CAN)
+						break readlines
 				}
 				mode = modeSET
 				state++ // should be 0 now

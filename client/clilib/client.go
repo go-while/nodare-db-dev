@@ -264,18 +264,23 @@ func (c *Client) Transport() {
 }
 
 
-func (c *Client) SOCK_Set(key string, val string, resp *string) (err error) {
+func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool) (err error) {
 	if c.tp == nil {
 		err = fmt.Errorf("ERROR SOCK_Set c.tp nil")
 		return
+	}
+
+	Oflag := server.NAK // false = not overwrite on Set
+	switch overwrite {
+		case true:
+			Oflag = server.ACK
 	}
 
 	// 	SET|1\r\n
 	//		AveryLooongKey11\r\n
 	//		AveryLongValue\r\n
 	//		\x17\r\n
-
-	request := server.MagicS+"|1"+server.CRLF+key+server.CRLF+val+server.CRLF+server.ETB+server.CRLF
+	request := server.MagicS+"|1|"+Oflag+server.CRLF+key+server.CRLF+val+server.CRLF+server.ETB+server.CRLF
 	c.logs.Debug("SOCK_Set k='%v' v='%v' request='%#v'", key, val, request)
 	_, err = io.WriteString(c.sock, request)
 	if err != nil {

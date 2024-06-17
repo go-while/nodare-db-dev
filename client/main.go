@@ -134,6 +134,7 @@ func main() {
 						// use random key:val and pass K:v to capturemaps to test later
 						DevUrandomString(keylen, &key)
 						DevUrandomString(vallen, &val)
+						key = fmt.Sprintf("%s-r%d-%d", key, r, startint)
 						//key = fmt.Sprintf("%s-r%d-%d", rkey, r, startint)
 						//val = fmt.Sprintf("%s-r%d-%d", rval, r, startint)
 					case false:

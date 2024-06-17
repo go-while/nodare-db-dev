@@ -71,12 +71,14 @@ const EOT = string(0x04) // End of Transmission // 4
 const ENQ = string(0x05) // Enquiry 			// 5
 const ACK = string(0x06) // Acknowledge 		// 6
 const BEL = string(0x07) // Bell, Alert 		// 7
+const NAK = string(0x15) // Negative Ack		// 21
 const SYN = string(0x16) // Synchronous Idle	// 22
 const ETB = string(0x17) // End of Trans. Block // 23
 const CAN = string(0x18) // Cancel 				// 24
 const EOM = string(0x19) // End of medium 		// 25
 const SUB = string(0x20) // Substitute  		// 26
 const ESC = string(0x1B) // Escape 				// 27
+
 
 // VIPER CONFIG DEFAULTS
 
