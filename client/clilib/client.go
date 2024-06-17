@@ -281,7 +281,7 @@ func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool) 
 	//		AveryLongValue\r\n
 	//		\x17\r\n
 	request := server.MagicS+"|1|"+Oflag+server.CRLF+key+server.CRLF+val+server.CRLF+server.ETB+server.CRLF
-	c.logs.Debug("SOCK_Set k='%v' v='%v' request='%#v'", key, val, request)
+	c.logs.Debug("SOCK_Set k='%v' v='%v' request='%#v' Oflag='%#v'", key, val, request, Oflag)
 	_, err = io.WriteString(c.sock, request)
 	if err != nil {
 		return
