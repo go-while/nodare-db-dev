@@ -205,6 +205,7 @@ func NewViperConf(cfgFile string, logs ilog.ILOG) (VConfig, int) {
 
 	c.viper.SetConfigFile(cfgFile)
 
+	// reads config.toml
 	if err := c.viper.ReadInConfig(); err != nil {
 		log.Fatalf("Error reading config file: %v", err)
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -214,7 +215,9 @@ func NewViperConf(cfgFile string, logs ilog.ILOG) (VConfig, int) {
 		}
 	}
 
+	// reading env results in overwriting config with env vars!
 	c.ReadConfigsFromEnvs()
+
 	sub_dicks := c.initDB()
 	if c.logs.IfDebug() {
 		c.PrintConfigsToConsole()
