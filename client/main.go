@@ -33,6 +33,7 @@ var (
 	logfile  string
 	keylen  int
 	vallen  int
+	overwrite  bool
 )
 
 func main() {
@@ -50,6 +51,7 @@ func main() {
 	flag.BoolVar(&randomize, "random", true, "if true uses random key:vals and caputures these in maps\n  so we can check them later. eats loads of memory!")
 	flag.IntVar(&keylen, "keylen", 16, "set length of key. used with -random=true")
 	flag.IntVar(&vallen, "vallen", 16, "set length of val. used with -random=true")
+	flag.BoolVar(&overwrite, "overwrite", false, "allows Set to overwrite values. tests may fail with overwrite=true!\n because randomness with many go-routines is not really 100% random means not 100% unique keys!\n \n overwrite flag works only with sockets! http does not implement this flag yet.")
 	flag.StringVar(&logfile, "logfile", "", "logfile for client")
 	flag.Parse()
 
@@ -151,7 +153,7 @@ func main() {
 					case 2:
 						// sock mode
 						// TODO! add test for SetMany
-						err = netCli.SOCK_Set(key, val, &resp)
+						err = netCli.SOCK_Set(key, val, &resp, overwrite)
 				}
 				if err != nil {
 					log.Fatalf("ERROR Set key='%s' => val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
