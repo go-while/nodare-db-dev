@@ -276,8 +276,8 @@ readlines:
 		//		\x17\r\n
 
 		// SET needs "$OV" as overwrite flag
-		// overwrite true = const Substitute "ACK" or \x05
-		// overwrite false = const Substitute "NAK" or \x15
+		// overwrite true = const Acknowledge "ACK" or \x05
+		// overwrite false = const Negative Ack "NAK" or \x15
 
 		// 	SET|1|$OF\r\n
 		//		AveryLooongKey11\r\n
