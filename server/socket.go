@@ -559,8 +559,8 @@ readlines:
 			state = -1
 			// no mode is set: find command and set mode to accept reading of multiple lines
 			split := strings.Split(line, "|")
-			if len(split) < 3 || len(split[2]) != 1 {
-				sock.logs.Error("SOCKET FORMAT ERROR N01 Set len(split)=%d split='%#v' line='%#v'", len(split), split, line)
+			if len(split) < 2 {
+				sock.logs.Error("SOCKET FORMAT ERROR N00 len(split)=%d split='%#v' line='%#v' ??", len(split), split, line)
 				cli.tp.PrintfLine(CAN)
 				break readlines
 			}
@@ -587,6 +587,11 @@ readlines:
 					break readlines
 				}
 				//ovflag := string(split[2])
+				if len(split) < 3 || len(split[2]) != 1 {
+					sock.logs.Error("SOCKET FORMAT ERROR N01 SET len(split)=%d split='%#v' line='%#v' ??", len(split), split, line)
+					cli.tp.PrintfLine(CAN)
+					break readlines
+				}
 				switch split[2] {
 					case ACK:
 						overwrite = true
