@@ -8,13 +8,15 @@ import (
 type XDatabase struct {
 	XDICK *XDICK
 	BootT int64
+	HashMode int
 }
 
-func NewDICK(logs ilog.ILOG, sub_dicks int) *XDatabase {
-	xdick := NewXDICK(logs, sub_dicks)
+func NewDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDatabase {
+	xdick := NewXDICK(logs, sub_dicks,hashmode)
 	db := &XDatabase{
 		XDICK: xdick,
 		BootT: time.Now().Unix(),
+		HashMode: hashmode, // must not change on runtime
 	}
 	return db
 }
