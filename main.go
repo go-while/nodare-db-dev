@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 
@@ -25,6 +26,7 @@ var (
 ) // end var
 
 func main() {
+	var CPUfile *os.File
 	// capture the flags: overwrites config file settings!
 	flag.StringVar(&flag_configfile, "config", server.DEFAULT_CONFIG_FILE, "path to config file")
 	flag.StringVar(&flag_logfile, "logfile", "", "path to ndb.log")
@@ -47,12 +49,11 @@ func main() {
 			go Prof.PprofWeb(flag_pprofweb)
 		}
 		if flag_profcpu {
-			logs.Info("Starting CPU profileing")
-			CPUfile, err := Prof.StartCPUProfile()
-			if err != nil {
-				logs.Fatal("Could not start CPU prof err='%v'", err)
+			logs.Info("Starting CPU prof")
+			CPUfile, _ = Prof.StartCPUProfile()
+			if CPUfile == nil {
+				logs.Fatal("Could not start CPU prof / write file")
 			}
-			defer CPUfile.Close()
 		}
 	}
 	if logs.IfDebug() {
@@ -65,7 +66,13 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
+	if CPUfile != nil {
+		logs.Info("Stop CPU prof")
+		Prof.StopCPUProfile()
+		CPUfile.Close()
+	}
 	stop_chan <- struct{}{} // force waiters to stop
 	wg.Wait()
+	time.Sleep(time.Second)
 	logs.Info("Exit: %s", os.Args[0])
 } // end func main
