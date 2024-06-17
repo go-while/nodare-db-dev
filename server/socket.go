@@ -550,7 +550,7 @@ readlines:
 			// 1st arg is command
 			// 2nd arg is number of keys client wants to set/get/del
 			// 3rt arg is $OV overwrite flag
-			// len min: X|1  || 2nd is not '|'
+			// len min: X|1  || 2nd char is not '|'
 			if len(line) < 3 || line[1] != '|' {
 				// invalid format
 				cli.tp.PrintfLine(CAN)
@@ -560,7 +560,7 @@ readlines:
 			// no mode is set: find command and set mode to accept reading of multiple lines
 			split := strings.Split(line, "|")
 			if len(split) < 3 || len(split[2]) != 1 {
-				sock.logs.Error("SOCKET FORMAT ERROR N01 len(split)=%d split='%#v'", len(split), split)
+				sock.logs.Error("SOCKET FORMAT ERROR N01 Set len(split)=%d split='%#v' line='%#v'", len(split), split, line)
 				cli.tp.PrintfLine(CAN)
 				break readlines
 			}
