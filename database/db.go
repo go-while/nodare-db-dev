@@ -10,7 +10,7 @@ type XDatabase struct {
 	BootT int64
 }
 
-func NewDICK(logs ilog.ILOG, sub_dicks uint32) *XDatabase {
+func NewDICK(logs ilog.ILOG, sub_dicks int) *XDatabase {
 	xdick := NewXDICK(logs, sub_dicks)
 	db := &XDatabase{
 		XDICK: xdick,
@@ -19,15 +19,14 @@ func NewDICK(logs ilog.ILOG, sub_dicks uint32) *XDatabase {
 	return db
 }
 
-func (db *XDatabase) Get(key string, val *interface{}) {
-	*val = db.XDICK.Get(key)
-	return
+func (db *XDatabase) Get(key string, val *string) bool {
+	return db.XDICK.Get(key, val)
 }
 
-func (db *XDatabase) Set(key string, value interface{}) error {
-	return db.XDICK.Set(key, value)
+func (db *XDatabase) Set(key string, value string, overwrite bool) bool {
+	return db.XDICK.Set(key, value, overwrite)
 }
 
-func (db *XDatabase) Del(key string) error {
+func (db *XDatabase) Del(key string) bool {
 	return db.XDICK.Del(key)
 }

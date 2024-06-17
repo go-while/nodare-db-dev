@@ -56,9 +56,9 @@ func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusNotAcceptable) // 406
 		return
 	}
-	var val interface{}
-	srv.db.Get(key, &val)
-	if val == nil {
+	var val string
+	found := srv.db.Get(key, &val)
+	if !found {
 		srv.logs.Info("not found key='%s'", key)
 		w.WriteHeader(http.StatusGone) // 410
 		return
@@ -89,8 +89,8 @@ func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request
 	// response as raw plain text with VAL only
 	//w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(val.(string)))
-}
+	w.Write([]byte(val))
+} // end func HandlerGetValByKey
 
 func (srv *XNDBServer) HandlerSet(w http.ResponseWriter, r *http.Request) {
 	nilheader(w)
@@ -99,8 +99,8 @@ func (srv *XNDBServer) HandlerSet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	var data map[string]interface{}
+	// FIXME DECODE JSON
+	var data map[string]string
 	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
 		w.WriteHeader(http.StatusNotAcceptable) // 406
@@ -108,17 +108,15 @@ func (srv *XNDBServer) HandlerSet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, value := range data {
-		err = srv.db.Set(key, value)
-		if err != nil {
+		ok := srv.db.Set(key, value, true) // default always overwrites
+		if !ok {
 			srv.logs.Warn("HandlerSet err='%v'", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}
-
 	w.WriteHeader(http.StatusCreated)
-
-}
+} // end func HandlerSet
 
 func (srv *XNDBServer) HandlerDel(w http.ResponseWriter, r *http.Request) {
 	nilheader(w)
@@ -134,13 +132,13 @@ func (srv *XNDBServer) HandlerDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := srv.db.Del(key)
-	if err != nil {
+	ok := srv.db.Del(key)
+	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
+} // end func HandlerDel
 
 func (srv *XNDBServer) SetLogLvl(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

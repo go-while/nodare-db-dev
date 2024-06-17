@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"github.com/go-while/nodare-db-dev/database"
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/utils"
 	"github.com/spf13/viper"
@@ -151,7 +152,7 @@ func (c *ViperConfig) ReadConfigsFromEnvs() {
 	}
 } // end func ReadConfigsFromEnvs
 
-func (c *ViperConfig) initDB() (sub_dicks uint32) {
+func (c *ViperConfig) initDB() (sub_dicks int) {
 
 	dbBaseDir, err := os.Getwd()
 	if err != nil {
@@ -162,20 +163,19 @@ func (c *ViperConfig) initDB() (sub_dicks uint32) {
 	c.createDirectory(filepath.Join(dbBaseDir, CONFIG_DIR))
 	c.createDirectory(filepath.Join(dbBaseDir, c.viper.GetString(VK_SETTINGS_DATA_DIR)))
 
-	setSUBDICKS := c.viper.GetUint32(VK_SETTINGS_SUB_DICKS)
-	for _, v := range AVAIL_SUBDICKS {
+	RTO = c.viper.GetInt(VK_NET_WEBSRV_READ_TIMEOUT)
+	WTO = c.viper.GetInt(VK_NET_WEBSRV_WRITE_TIMEOUT)
+	ITO = c.viper.GetInt(VK_NET_WEBSRV_IDLE_TIMEOUT)
+
+	setSUBDICKS := c.viper.GetInt(VK_SETTINGS_SUB_DICKS)
+	for _, v := range database.AVAIL_SUBDICKS {
 		if setSUBDICKS == v {
 			sub_dicks = setSUBDICKS
 			return
 		}
 	}
-	RTO = c.viper.GetInt(VK_NET_WEBSRV_READ_TIMEOUT)
-	WTO = c.viper.GetInt(VK_NET_WEBSRV_WRITE_TIMEOUT)
-	ITO = c.viper.GetInt(VK_NET_WEBSRV_IDLE_TIMEOUT)
-	// reached here we did not get a valid sub_dicks value from config
-	// always return at least 10 so we don't fail
-	log.Printf("WARN invalid sub_dicks value=%d !! defaulted to 1000", setSUBDICKS)
-	return 1000
+	c.logs.Fatal("Invalid sub_dicks '%s' value=%d !! available='%#v'", VK_SETTINGS_SUB_DICKS, setSUBDICKS, database.AVAIL_SUBDICKS)
+	return
 } // end func initDB
 
 func (c *ViperConfig) PrintConfigsToConsole() {
@@ -185,7 +185,7 @@ func (c *ViperConfig) PrintConfigsToConsole() {
 	}
 }
 
-func NewViperConf(cfgFile string, logs ilog.ILOG) (VConfig, uint32) {
+func NewViperConf(cfgFile string, logs ilog.ILOG) (VConfig, int) {
 
 	if len(strings.TrimSpace(cfgFile)) == 0 {
 		log.Printf("No config file in '%s' was supplied. Using default value: %s", cfgFile, DEFAULT_CONFIG_FILE)

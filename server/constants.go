@@ -5,9 +5,7 @@ import (
 	"github.com/go-while/nodare-db-dev/logger"
 )
 
-var AVAIL_SUBDICKS = []uint32{10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 2000000000, 4000000000}
-
-const DEFAULT_SUB_DICKS = 1000
+const DEFAULT_SUB_DICKS = 256
 
 const DEFAULT_PW_LEN = 32 // admin/username:password
 const DEFAULT_SUPERADMIN = "superadmin"

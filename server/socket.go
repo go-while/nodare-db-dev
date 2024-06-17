@@ -351,7 +351,7 @@ readlines:
 				keys = append(keys, key)
 				vals[key] = &line
 
-				sock.logs.Debug("SOCKET [cli=%d] modeSet state1 recv k='%s' v='%s' keys=%d vals=%d", cli.id, key, line, len(keys), len(vals))
+				sock.logs.Debug("SOCKET [cli=%d] modeSET state1 recv k='%s' v='%s' keys=%d vals=%d", cli.id, key, line, len(keys), len(vals))
 				key = ""
 				state++ // modeSET state is 2 now
 				continue readlines
@@ -364,20 +364,20 @@ readlines:
 
 				switch line {
 				case ETB:
-					sock.logs.Debug("SOCKET [cli=%d] modeSet state2 got ETB", cli.id)
+					sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got ETB", cli.id)
 					// client finished streaming
 					// set key:val pairs
 					setloopkeys:
 					for _, akey := range keys {
 						val := vals[akey]
-						seterr := sock.db.Set(akey, *val)
-						if seterr != nil {
-							sock.logs.Error("SOCKET [cli=%d] modeSet state2 seterr='%v'", cli.id, seterr)
+						ok := sock.db.Set(akey, *val, true) // default always overwrites
+						if !ok {
+							sock.logs.Error("SOCKET [cli=%d] modeSET state2 set !ok", cli.id)
 							// reply error
 							n, ioerr := io.WriteString(cli.conn, NUL+key)
 							if ioerr != nil {
 								// could not send reply, peer disconnected?
-								sock.logs.Error("SOCKET [cli=%d] modeSet state2 reply seterr='%v' ioerr='%v'", cli.id, seterr, ioerr)
+								sock.logs.Error("SOCKET [cli=%d] modeSET state2 reply !ok ioerr='%v'", cli.id, ioerr)
 								break readlines
 							}
 							sentbytes += n
@@ -385,14 +385,14 @@ readlines:
 						}
 						tmpset--
 						set++
-						sock.logs.Debug("SOCKET [cli=%d] state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
+						sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
 					} // end for keys
 
 					// reply single ACK
 					sock.logs.Debug("SOCKET [cli=%d] state2 reply ACK", cli.id)
 					n, ioerr := io.WriteString(cli.conn, ACK+CRLF)
 					if ioerr != nil {
-						sock.logs.Error("SOCKET [cli=%d] modeSet state2 reply ioerr='%v'", cli.id, ioerr)
+						sock.logs.Error("SOCKET [cli=%d] modeSET state2 reply ioerr='%v'", cli.id, ioerr)
 						break readlines
 					}
 					sentbytes += n
@@ -401,7 +401,7 @@ readlines:
 					continue readlines
 
 				case BEL:
-					sock.logs.Debug("SOCKET [cli=%d] modeSet state2 got BEL", cli.id)
+					sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got BEL", cli.id)
 					// client continues sending k,v pairs
 					continue readlines
 				}
@@ -439,10 +439,10 @@ readlines:
 					lenk := len(keys)
 					getloopkeys:
 					for _, akey := range keys {
-						var val interface{}
-						sock.db.Get(akey, &val)
-						if val == nil {
-							sock.logs.Error("SOCKET [cli=%d] modeGet state1 val nil", cli.id)
+						var val string
+						found := sock.db.Get(akey, &val)
+						if !found {
+							sock.logs.Error("SOCKET [cli=%d] modeGET state1 val nil", cli.id)
 							// reply error
 							retstr := NUL
 							if lenk > 1 {
@@ -451,22 +451,22 @@ readlines:
 							n, ioerr := io.WriteString(cli.conn, retstr+CRLF)
 							if ioerr != nil {
 								// could not send reply, peer disconnected?
-								sock.logs.Error("SOCKET [cli=%d] modeGet state1 replyERR ioerr='%v'", cli.id, ioerr)
+								sock.logs.Error("SOCKET [cli=%d] modeGET state1 replyERR ioerr='%v'", cli.id, ioerr)
 								break readlines
 							}
 							sentbytes += n
 							continue getloopkeys
 						}
-						n, ioerr := io.WriteString(cli.conn, val.(string)+CRLF)
+						n, ioerr := io.WriteString(cli.conn, val+CRLF)
 						if ioerr != nil {
 							// could not send reply, peer disconnected?
-							sock.logs.Error("SOCKET [cli=%d] modeGet state1 replyACK ioerr='%v'", cli.id, ioerr)
+							sock.logs.Error("SOCKET [cli=%d] modeGET state1 replyACK ioerr='%v'", cli.id, ioerr)
 							break readlines
 						}
 						tmpget--
 						get++
 						sentbytes += n
-						sock.logs.Debug("SOCKET [cli=%d] modeGet state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val.(string))
+						sock.logs.Debug("SOCKET [cli=%d] modeGET state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val)
 					} // end for keys
 					mode = no_mode
 					keys = nil
@@ -506,9 +506,9 @@ readlines:
 				case ETB:
 					delloopkeys:
 					for _, akey := range keys {
-						err := sock.db.Del(akey)
-						if err == nil {
-							sock.logs.Error("SOCKET [cli=%d] modeDEL state1 err='%v'", cli.id, err)
+						ok := sock.db.Del(akey)
+						if !ok {
+							sock.logs.Error("SOCKET [cli=%d] modeDEL state1 !ok", cli.id)
 							// reply with error
 							n, ioerr := io.WriteString(cli.conn, NUL+key+CRLF)
 							if ioerr != nil {
