@@ -2,7 +2,7 @@ module github.com/go-while/nodare-db-dev/client
 
 go 1.22.4
 
-require github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240617221542-e336839070ea
+require github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240617223134-34e83e7a7451
 
 require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
