@@ -336,7 +336,7 @@ readlines:
 			switch state {
 			case 0: // modeSET state 0 reads key
 				if len(line) > KEY_LIMIT {
-					cli.tp.PrintfLine(CAN)
+					cli.tp.PrintfLine(EOM)
 					break readlines
 				}
 				key = line
@@ -345,7 +345,7 @@ readlines:
 
 			case 1: // state 1 reads val
 				if len(line) > VAL_LIMIT {
-					cli.tp.PrintfLine(CAN)
+					cli.tp.PrintfLine(EOT)
 					break readlines
 				}
 				// got a k,v pair!
@@ -425,7 +425,7 @@ readlines:
 
 			case 0: // modeGET state 0 reads key
 				if len(line) > KEY_LIMIT {
-					cli.tp.PrintfLine(CAN)
+					cli.tp.PrintfLine(EOM)
 					break readlines
 				}
 				numBy-- // decrease counter
@@ -493,7 +493,7 @@ readlines:
 			// process multiple Del lines here.
 			case 0: // state 0 reads key
 				if len(line) > KEY_LIMIT {
-					cli.tp.PrintfLine(CAN)
+					cli.tp.PrintfLine(EOM)
 					break readlines
 				}
 				numBy-- // decrease counter
@@ -560,6 +560,7 @@ readlines:
 			// no mode is set: find command and set mode to accept reading of multiple lines
 			split := strings.Split(line, "|")
 			if len(split) < 3 || len(split[2]) != 1 {
+				sock.logs.Error("SOCKET FORMAT ERROR N01 len(split)=%d split='%#v'", len(split), split)
 				cli.tp.PrintfLine(CAN)
 				break readlines
 			}
