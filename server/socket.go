@@ -84,7 +84,7 @@ func (sock *SOCKET) CloseSocket() {
 	stopnotify := <-sock.stop_chan // waits for signal from main
 	sock.socketlistener.Close()
 	os.Remove(sock.socketPath)
-	sock.logs.Debug("Socket closed")
+	//sock.logs.Debug("Socket closed")
 	sock.stop_chan <- stopnotify // push back in to notify others
 }
 
@@ -240,7 +240,7 @@ func (sock *SOCKET) handleSocketConn(cli *CLI, raddr string, socket bool) {
 
 	// session flags
 	var mode = no_mode
-	var state int8 = -1
+	var state int = -1
 	var numBy int
 	var cmd string
 	var key string
@@ -249,6 +249,7 @@ func (sock *SOCKET) handleSocketConn(cli *CLI, raddr string, socket bool) {
 	var sentbytes int
 	var recvbytes int
 	var overwrite bool
+	//var split [3]string
 
 readlines:
 	for {
@@ -320,11 +321,11 @@ readlines:
 
 		switch mode {
 		case modeADD:
-			sock.logs.Debug("SOCKET [cli=%d] modeADD line='%#v'", cli.id, line)
+			//sock.logs.Debug("SOCKET [cli=%d] modeADD line='%#v'", cli.id, line)
 			// TODO process multiple Add lines here.
 
 		case modeSET:
-			sock.logs.Debug("SOCKET [cli=%d] modeSET line='%#v'", cli.id, line)
+			//sock.logs.Debug("SOCKET [cli=%d] modeSET line='%#v'", cli.id, line)
 			// process multiple Set lines here.
 
 			// receive first line with key at state 0
@@ -356,7 +357,7 @@ readlines:
 				keys = append(keys, key)
 				vals[key] = &line
 
-				sock.logs.Debug("SOCKET [cli=%d] modeSET state1 recv k='%s' v='%s' keys=%d vals=%d", cli.id, key, line, len(keys), len(vals))
+				//sock.logs.Debug("SOCKET [cli=%d] modeSET state1 recv k='%s' v='%s' keys=%d vals=%d", cli.id, key, line, len(keys), len(vals))
 				key = ""
 				state++ // modeSET state is 2 now
 				continue readlines
@@ -369,7 +370,7 @@ readlines:
 
 				switch line {
 				case ETB:
-					sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got ETB", cli.id)
+					//sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got ETB", cli.id)
 					// client finished streaming
 					// set key:val pairs
 					setloopkeys:
@@ -390,11 +391,11 @@ readlines:
 						}
 						tmpset--
 						set++
-						sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
+						//sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
 					} // end for keys
 
 					// reply single ACK
-					sock.logs.Debug("SOCKET [cli=%d] state2 reply ACK", cli.id)
+					//sock.logs.Debug("SOCKET [cli=%d] state2 reply ACK", cli.id)
 					n, ioerr := io.WriteString(cli.conn, ACK+CRLF)
 					if ioerr != nil {
 						sock.logs.Error("SOCKET [cli=%d] modeSET state2 reply ioerr='%v'", cli.id, ioerr)
@@ -406,14 +407,14 @@ readlines:
 					continue readlines
 
 				case BEL:
-					sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got BEL", cli.id)
+					//sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got BEL", cli.id)
 					// client continues sending k,v pairs
 					continue readlines
 				}
 			}
 
 		case modeGET:
-			sock.logs.Debug("SOCKET [cli=%d] modeGET line='%#v'", cli.id, line)
+			//sock.logs.Debug("SOCKET [cli=%d] modeGET line='%#v'", cli.id, line)
 			// process multiple Get lines here.
 
 			// receive first line with key at state 0
@@ -471,7 +472,7 @@ readlines:
 						tmpget--
 						get++
 						sentbytes += n
-						sock.logs.Debug("SOCKET [cli=%d] modeGET state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val)
+						//sock.logs.Debug("SOCKET [cli=%d] modeGET state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val)
 					} // end for keys
 					mode = no_mode
 					keys = nil
@@ -482,7 +483,7 @@ readlines:
 			} // end switch state
 
 		case modeDEL:
-			sock.logs.Debug("SOCKET [cli=%d] modeDEL line='%#v'", cli.id, line)
+			//sock.logs.Debug("SOCKET [cli=%d] modeDEL line='%#v'", cli.id, line)
 
 			// receive first line with key at state 0
 			// if client sends \x07 (BEL) flip state to 0 and continue reading key lines
@@ -533,7 +534,7 @@ readlines:
 						tmpdel--
 						del++
 						sentbytes += n
-						sock.logs.Debug("SOCKET [cli=%d] modeDEL state1 ETB k='%s'", cli.id, akey)
+						//sock.logs.Debug("SOCKET [cli=%d] modeDEL state1 ETB k='%s'", cli.id, akey)
 					} // end for keys
 				case BEL:
 					state-- // reset state to read more keys
@@ -550,83 +551,38 @@ readlines:
 			// 1st arg is command
 			// 2nd arg is number of keys client wants to set/get/del
 			// 3rt arg is $OV overwrite flag
-			// len min: X|1  || 2nd char is not '|'
-			if len(line) < 3 || line[1] != '|' {
-				// invalid format
-				cli.tp.PrintfLine(CAN)
-				break readlines
-			}
-			state = -1
-			// no mode is set: find command and set mode to accept reading of multiple lines
-			split := strings.Split(line, "|")
-			if len(split) < 2 {
-				sock.logs.Error("SOCKET FORMAT ERROR N00 len(split)=%d split='%#v' line='%#v' ??", len(split), split, line)
-				cli.tp.PrintfLine(CAN)
-				break readlines
-			}
-			cmd = string(split[0])
+			// len min: X|1
+
+			state, numBy = -1, -1
 			//add, tmpadd = 0, 0
 			set, tmpset = 0, 0
 			del, tmpdel = 0, 0
 			get, tmpget = 0, 0
+
+			// no mode is set: find command and set mode to accept reading of multiple lines
+			//split = nil
+
+			//split := strings.Split(line, "|")
+			//if len(split) < 2 {
+			//	sock.logs.Error("SOCKET FORMAT ERROR N00 len(split)=%d split='%#v' line='%#v' ??", len(split), split, line)
+			//	cli.tp.PrintfLine(CAN)
+			//	break readlines
+			//}
+			//cmd = string(split[0])
+
+			//cmd = string(line[0]) // 1st byte is CMD
+			// 2nd byte is DELIM
+
+			if !sock.parseCMDline(line, &cmd, &numBy, &overwrite, &state, &mode, &numBy) {
+				cli.tp.PrintfLine(CAN)
+				break readlines
+			}
+			if state == 0
+				// goes up to mode handling
+				continue readlines
+			}
+
 			switch cmd {
-
-			/*
-			case MagicA: // ADD
-				mode = modeADD
-
-			case MagicL: // LIST
-				mode = modeLIST
-			*/
-
-			case MagicS: // SET key => value
-				numBy = utils.Str2int(split[1])
-				if numBy == 0 {
-					// abnormal: str2num failed parsing
-					// or client send really a 0
-					break readlines
-				}
-				//ovflag := string(split[2])
-				if len(split) < 3 || len(split[2]) != 1 {
-					sock.logs.Error("SOCKET FORMAT ERROR N01 SET len(split)=%d split='%#v' line='%#v' ??", len(split), split, line)
-					cli.tp.PrintfLine(CAN)
-					break readlines
-				}
-				switch split[2] {
-					case ACK:
-						overwrite = true
-					case NAK:
-						overwrite = false
-					default:
-						cli.tp.PrintfLine(CAN)
-						break readlines
-				}
-				mode = modeSET
-				state++ // should be 0 now
-				continue readlines
-
-			case MagicG: // GET key returns value or NUL
-				numBy = utils.Str2int(split[1])
-				if numBy == 0 {
-					// abnormal: str2num failed parsing
-					// or client send really a 0
-					break readlines
-				}
-				mode = modeGET
-				state++ // should be 0 now
-				continue readlines
-
-			case MagicD: // DEL key
-				numBy = utils.Str2int(split[1])
-				if numBy == 0 {
-					// abnormal: str2num failed parsing
-					// or client send really a 0
-					break readlines
-				}
-				mode = modeDEL
-				state++ // should be 0 now
-				continue readlines
-
 			case Magic1:
 				// CAPTURE MEMORY PROFILE
 				// 		M|  <--- use default: run capture 30 sec instantly
@@ -643,6 +599,7 @@ readlines:
 				runi := 30
 				waiti := 0
 				var args []string
+				split := strings.Split(line, "|")
 				if strings.Contains(split[1], ",") {
 					args = strings.Split(split[1], ",")[0:2]
 					run := utils.Str2int(args[0])
@@ -700,6 +657,73 @@ readlines:
 
 	sock.logs.Info("SOCKET [cli=%d] LEFT conn rx=%d tx=%d", cli.id, recvbytes, sentbytes)
 } // end func handleConn
+
+func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *bool, state *int, mode *int, numBy *int) bool {
+	var doRead_oflag, read_oflag bool
+	if len(line) < 3 || line[1] != '|' {
+		// invalid format
+		sock.logs.Error("parseCMDline bad format delim1 line='%#v'=%d", line, len(line))
+		return false
+	}
+	*cmd = string(line[0]) // 1st byte is CMD
+	if *cmd == MagicS {
+		doRead_oflag = true
+	}
+	numby := ""
+
+	for i, c := range line[2:] { // reads 3rd byte up to '|' to find num
+		if doRead_oflag && read_oflag && *num > 0 {
+			switch string(c) {
+				case ACK:
+					*overwrite = true
+					break
+				case NAK:
+					*overwrite = false
+					break
+				default:
+					sock.logs.Error("parseCMDline read oflag failed line='%#v' c='%#v' i=%d", line, c, i)
+					return false
+			}
+		}
+		if i > 9 { // max 10 digits of num
+			sock.logs.Error("parseCMDline num > 10 digits")
+			return false
+		}
+		if c == '|' {
+			//sock.logs.Debug("parseCMDline hit 2nd delim i=%d c='%#v' doRead_oflag=%t cmd=%s", i, c, doRead_oflag, *cmd)
+			if !doRead_oflag {
+				break
+			}
+			read_oflag = true
+			continue
+		}
+		if utils.IsDigit(string(c)) {
+			numby = numby + string(c)
+		}
+	} // end for parse num
+	*num = utils.Str2int(numby)
+	if *num == 0 {
+		sock.logs.Error("parseCMDline read num=0")
+		return false
+	}
+
+	switch *cmd {
+		case MagicS:
+			*mode = modeSET
+			*state++ // should be 0 now
+		case MagicG:
+			*mode = modeGET
+			*state++ // should be 0 now
+		case MagicD:
+			*mode = modeDEL
+			*state++ // should be 0 now
+		default:
+			*state-- // reduce state to parse other admin/debug commands
+	}
+
+	//sock.logs.Debug("parseCMDline returned cmd='%s' num=%d overwrite=%t doRead_oflag=%t", *cmd, *num, *overwrite, doRead_oflag)
+	return true
+} // end func parseCMDline
 
 func getRemoteIP(conn net.Conn) string {
 	remoteAddr := conn.RemoteAddr()
