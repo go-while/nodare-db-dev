@@ -13,7 +13,7 @@ type DickEntry struct {
 }
 
 type DickTable struct {
-	tableSLI   []*DickEntry
+	//tableSLI   []*DickEntry
 	tableMAP   map[string]string
 	size       int64
 	used       int64

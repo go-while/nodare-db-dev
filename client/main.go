@@ -128,6 +128,7 @@ func main() {
 			logs.Info("Launch insert test round=%d/%d", r, rounds)
 			var err error
 			var set int
+			var exists bool
 			for i := 1; i <= items; i++ {
 				var key, val, resp string
 				//var rkey, rval string
@@ -153,10 +154,13 @@ func main() {
 					case 2:
 						// sock mode
 						// TODO! add test for SetMany
-						err = netCli.SOCK_Set(key, val, &resp, overwrite)
+						err = netCli.SOCK_Set(key, val, &resp, overwrite, &exists)
 				}
 				if err != nil {
 					log.Fatalf("ERROR Set key='%s' => val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
+				}
+				if exists {
+					log.Warn("Set key='%s' exists, val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
 				}
 				if randomize {
 					testmap[key] = val

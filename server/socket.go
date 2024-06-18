@@ -234,9 +234,9 @@ func (sock *SOCKET) handleSocketConn(cli *CLI, raddr string, socket bool) {
 	}
 	// counter
 	//var add, tmpadd uint64
-	var set, tmpset uint64
-	var get, tmpget uint64
-	var del, tmpdel uint64
+	var set, tmpset int
+	var get, tmpget int
+	var del, tmpdel int
 
 	// session flags
 	var mode = no_mode
@@ -379,9 +379,9 @@ readlines:
 						sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB PRE-Set akey='%s' v='%s'", cli.id, akey, *val)
 						ok := sock.db.Set(akey, *val, overwrite) // default always overwrites
 						if !ok {
-							sock.logs.Error("SOCKET [cli=%d] modeSET state2 set !ok", cli.id)
+							sock.logs.Error("SOCKET [cli=%d] modeSET state2 set !ok overwrite=%t", cli.id, overwrite)
 							// reply error
-							n, ioerr := io.WriteString(cli.conn, NUL+key)
+							n, ioerr := io.WriteString(cli.conn, NUL+CRLF)
 							if ioerr != nil {
 								// could not send reply, peer disconnected?
 								sock.logs.Error("SOCKET [cli=%d] modeSET state2 reply !ok ioerr='%v'", cli.id, ioerr)
@@ -395,14 +395,16 @@ readlines:
 						sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
 					} // end for keys
 
-					// reply single ACK
-					sock.logs.Debug("SOCKET [cli=%d] state2 reply ACK", cli.id)
-					n, ioerr := io.WriteString(cli.conn, ACK+CRLF)
-					if ioerr != nil {
-						sock.logs.Error("SOCKET [cli=%d] modeSET state2 reply ioerr='%v'", cli.id, ioerr)
-						break readlines
+					if set == len(keys) {
+						// reply single ACK
+						sock.logs.Debug("SOCKET [cli=%d] state2 reply ACK", cli.id)
+						n, ioerr := io.WriteString(cli.conn, ACK+CRLF)
+						if ioerr != nil {
+							sock.logs.Error("SOCKET [cli=%d] modeSET state2 reply ioerr='%v'", cli.id, ioerr)
+							break readlines
+						}
+						sentbytes += n
 					}
-					sentbytes += n
 					keys, vals = nil, nil
 					mode = no_mode // state reverts when client sends next command
 					continue readlines

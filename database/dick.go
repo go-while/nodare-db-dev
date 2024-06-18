@@ -33,7 +33,7 @@ type XDICK struct {
 	booted   int64 // timestamp
 	mainmux  sync.RWMutex
 	SubDICKsMAP map[string]*SubDICK // key=string=idx
-	SubDICKsSLI []*SubDICK
+	//SubDICKsSLI []*SubDICK
 	SubDepth int
 	SubCount int
 	HashMode int

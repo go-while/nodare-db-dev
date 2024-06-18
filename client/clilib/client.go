@@ -264,7 +264,7 @@ func (c *Client) Transport() {
 }
 
 
-func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool) (err error) {
+func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool, exists *bool) (err error) {
 	if c.tp == nil {
 		err = fmt.Errorf("ERROR SOCK_Set c.tp nil")
 		return
@@ -276,10 +276,11 @@ func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool) 
 			Oflag = server.ACK
 	}
 
-	// 	SET|1\r\n
+	// 	SET|1|$Oflag\r\n
 	//		AveryLooongKey11\r\n
 	//		AveryLongValue\r\n
 	//		\x17\r\n
+
 	request := server.MagicS+"|1|"+Oflag+server.CRLF+key+server.CRLF+val+server.CRLF+server.ETB+server.CRLF
 	c.logs.Debug("SOCK_Set k='%v' v='%v' request='%#v' Oflag='%#v'", key, val, request, Oflag)
 	_, err = io.WriteString(c.sock, request)
@@ -295,8 +296,17 @@ func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool) 
 		err = fmt.Errorf("SOCK_Set empty reply")
 		return
 	}
+
+	if string(reply[0]) == server.NUL && !overwrite {
+		c.logs.Debug("SOCK_Set k='%v' exists, could not set v='%v' reply='%#v' overwrite=%t", key, val, reply, overwrite)
+		*exists = true
+		return
+	}
+
 	if string(reply[0]) != server.ACK {
 		c.logs.Error("SOCK_Set !reply.ACK k='%v' v='%v' reply='%#v'", key, val, reply)
+		err = fmt.Errorf("SOCK_Set seq.error expected ACK: got '%#v'", reply[0])
+		return
 	}
 	c.logs.Debug("SOCK_Set k='%v' v='%v' got ReadLine reply='%#v'", key, val, reply)
 	*resp = reply
