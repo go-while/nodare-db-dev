@@ -157,10 +157,10 @@ func main() {
 						err = netCli.SOCK_Set(key, val, &resp, overwrite, &exists)
 				}
 				if err != nil {
-					log.Fatalf("ERROR Set key='%s' => val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
+					logs.Fatal("ERROR Set key='%s' => val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
 				}
 				if exists {
-					log.Warn("Set key='%s' exists, val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
+					logs.Debug("Set key='%s' exists, val='%s' err='%v' resp='%s' mode=%d overwrite=%t", key, val, err, resp, mode, overwrite)
 				}
 				if randomize {
 					testmap[key] = val
