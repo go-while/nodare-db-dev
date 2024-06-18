@@ -3,7 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
-	"github.com/go-while/nodare-db-dev/database"
+	//"github.com/go-while/nodare-db-dev/database"
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/utils"
 	"github.com/spf13/viper"
@@ -166,15 +166,7 @@ func (c *ViperConfig) initDB() (sub_dicks int) {
 	RTO = c.viper.GetInt(VK_NET_WEBSRV_READ_TIMEOUT)
 	WTO = c.viper.GetInt(VK_NET_WEBSRV_WRITE_TIMEOUT)
 	ITO = c.viper.GetInt(VK_NET_WEBSRV_IDLE_TIMEOUT)
-
-	setSUBDICKS := c.viper.GetInt(VK_SETTINGS_SUB_DICKS)
-	for _, v := range database.AVAIL_SUBDICKS {
-		if setSUBDICKS == v {
-			sub_dicks = setSUBDICKS
-			return
-		}
-	}
-	c.logs.Fatal("Invalid sub_dicks '%s' value=%d !! available='%#v'", VK_SETTINGS_SUB_DICKS, setSUBDICKS, database.AVAIL_SUBDICKS)
+	sub_dicks = c.viper.GetInt(VK_SETTINGS_SUB_DICKS)
 	return
 } // end func initDB
 

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"strings"
 )
 
 const (
@@ -47,24 +48,23 @@ func NewLogger(lvl int, logfile string) ILOG {
 func GetEnvLOGLEVEL() int {
 	// export LOGLEVEL=[INFO|WARN|DEBUG]
 	if logstr, ok := os.LookupEnv("LOGLEVEL"); ok {
+		log.Printf("ilog.GetEnvLOGLEVEL LOGLEVEL='%s'", logstr)
 		return GetLOGLEVEL(logstr)
 	}
 	return INFO //default to INFO
 }
 
 func GetLOGLEVEL(loglvl string) (retval int) {
-	switch loglvl {
+	switch strings.ToUpper(loglvl) {
 	case "INFO":
 		retval = INFO
-	case "WARN":
-		retval = WARN
 	case "DEBUG":
 		retval = DEBUG
 	default:
 		retval = -1
 	}
 	if retval > 0 {
-		log.Printf("LOGLEVEL='%s'", loglvl)
+		log.Printf("ilog.GetLOGLEVEL LOGLEVEL='%s' retval=%d", loglvl, retval)
 	}
 	return
 }

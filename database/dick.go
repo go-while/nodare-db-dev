@@ -1,5 +1,6 @@
 package database
 
+
 import (
 	"encoding/binary"
 	"fmt"
@@ -13,14 +14,19 @@ import (
 	"time"
 )
 
+var SYSMODE int
+
 const (
-	INITIAL_SIZE = 1024*1024
-	HASH_siphash = 0x01
+	MAPMODE = 1
+	SLIMODE = 2
+	INITIAL_SIZE = int64(128)
+	//MAX_SIZE     = 1 << 63
+	//HASH_siphash = 0x01
 	HASH_FNV32A  = 0x02
 	HASH_FNV64A  = 0x03
 )
 
-var AVAIL_SUBDICKS = []int{16, 256, 4096}
+var AVAIL_SUBDICKS = []int{16, 256, 4096, 65536}
 
 var key0, key1 uint64 // why
 var once sync.Once // why
@@ -32,8 +38,10 @@ type XDICK struct {
 	//   subdicks can lock XDICK
 	booted   int64 // timestamp
 	mainmux  sync.RWMutex
-	SubDICKs map[string]*SubDICK // key=string=idx
+	SubDICKsSLI []*SubDICK // idi is index to [] holding 10, 100, 1000, 10000 subdicks
+	SubDICKsMAP map[string]*SubDICK // key=string=idx
 	SubDepth int
+	SubCount uint32 // used with SLI
 	HashMode int
 	logs     ilog.ILOG
 	pcas     *pcashash.Hash // hash go objects
@@ -42,61 +50,92 @@ type XDICK struct {
 type SubDICK struct {
 	parent     sync.RWMutex
 	submux     sync.RWMutex
-	dickTable  *DickTable
+	dickTable  *DickTable // MAP
+	hashTables [2]*DickTable // SLI
+	rehashidi  int64 // SLI
 	logs       ilog.ILOG
 }
 
 func NewXDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDICK {
 	var mainmux sync.RWMutex
 	// create sub_dicks
-	depth := 0
-	switch sub_dicks {
-		case AVAIL_SUBDICKS[0]:
-			depth = 1
-		case  AVAIL_SUBDICKS[1]:
-			depth = 2
-		case  AVAIL_SUBDICKS[2]:
-			depth = 3
-		case  AVAIL_SUBDICKS[3]:
-			depth = 4
-		default:
-			logs.Fatal("sub_dicks can not be 0: 16, 256, 4096, 65536, 1048576, 16777216")
-	}
+
 	xdick := &XDICK{
 		pcas: pcashash.New(),
 		mainmux:  mainmux,
-		SubDepth: depth,
+		SubCount: uint32(sub_dicks),
 		HashMode: hashmode, // must not change on runtime
 		logs:     logs,
 	}
-	// creates sub_dicks by depth value
-	var combinations []string
-	generateHexCombinations(depth, "", &combinations)
-	xdick.SubDICKs = make(map[string]*SubDICK, len(combinations))
-	logs.Debug("Create sub_dicks=%d comb=%d", sub_dicks, len(combinations))
-	for _, idx := range combinations {
-		subDICK := &SubDICK{
-			parent:     mainmux,
-			dickTable: NewDickTable(INITIAL_SIZE),
-			//logs:       logs,
-		}
-		xdick.SubDICKs[idx] = subDICK
-	} // end for idx
+
+
+	switch SYSMODE {
+		case MAPMODE:
+			switch sub_dicks {
+				case AVAIL_SUBDICKS[0]: // 16
+					xdick.SubDepth = 1
+				case AVAIL_SUBDICKS[1]: // 256
+					xdick.SubDepth = 2
+				case AVAIL_SUBDICKS[2]: // 4096
+					xdick.SubDepth = 3
+				case AVAIL_SUBDICKS[3]: // 65536
+					xdick.SubDepth = 4
+				default:
+					logs.Fatal("invalid sub_dicks=%d! available: 16, 256, 4096, 65536", sub_dicks)
+			}
+			// creates sub_dicks by depth value
+			var combinations []string
+			generateHexCombinations(xdick.SubDepth, "", &combinations)
+			xdick.SubDICKsMAP = make(map[string]*SubDICK, len(combinations))
+			logs.Debug("Create sub_dicks=%d comb=%d", sub_dicks, len(combinations))
+			for _, idx := range combinations {
+				subDICK := &SubDICK{
+					parent:     mainmux,
+					dickTable: NewDickTable(INITIAL_SIZE),
+					//logs:       logs,
+				}
+				xdick.SubDICKsMAP[idx] = subDICK
+			} // end for idx
+		/*
+		case SLIMODE:
+			switch sub_dicks {
+				case 100:
+					// pass
+				case 1000:
+					// pass
+				case 10000:
+					// pass
+				default:
+					logs.Fatal("invalid sub_dicks=%d! available: 100, 1000, 10000", sub_dicks)
+			}
+			//xdick.SubDICKsSLI = make([]*SubDICK, sub_dicks)
+			for i := 0; i < sub_dicks; i++ {
+				subDICK := &SubDICK{
+					parent:     mainmux,
+					hashTables: [2]*DickTable{NewDickTable(0), NewDickTable(0)},
+					rehashidi:  -1,
+					//logs:       logs,
+				}
+				xdick.SubDICKsSLI = append(xdick.SubDICKsSLI, subDICK)
+				//xdick.SubDICKsSLI[i] = subDICK
+			} // end for
+			logs.Debug("Created subDICKs %d/%d ", len(xdick.SubDICKsSLI), sub_dicks)
+		*/
+	}
 
 	//for idx := range combinations {
 	//	go xdick.watchDog(uint32(idx)) // FIXME:::cannot use uint32(idx) (value of type uint32) as string value in argument to xdick.watchDog
 	//}
 
-	logs.Debug("Created subDICKs %d/%d ", len(xdick.SubDICKs), sub_dicks)
+	logs.Debug("Created subDICKs %d/%d ", len(xdick.SubDICKsMAP), sub_dicks)
 	return xdick
-}
+} // end func NewXDICK
 
 func generateCRC32AsString(input string, sd int, output *string) {
 	byteSlice := []byte(input)
 	hash := crc32.NewIEEE()
 	hash.Write(byteSlice)
 	checksum := hash.Sum32()
-	//checksumStr := strconv.FormatUint(uint64(checksum), 16)
 	*output = fmt.Sprintf("%04x", checksum)[:sd]
 }
 
@@ -104,65 +143,264 @@ func generateFNV1aHash(input string, sd int, output *string) {
 	hash := fnv.New32a()
 	hash.Write([]byte(input))
 	hashValue := hash.Sum32()
-	//hashValueStr := strconv.FormatUint(uint64(hashValue), 16)
 	*output = fmt.Sprintf("%04x", hashValue)[:sd]
 }
 
-func (d *XDICK) KeyIndex(key string, idx *string) {
-	// generate a quick hash and cuts N chars to divide into sub_dicks 0__-f__
-	switch d.HashMode {
-		case 1:
-		// use PCAS
-		*idx = fmt.Sprintf("%04x", pcashash.String(key), d.SubDepth)[:d.SubDepth]
-		case 2:
-		// use CRC32
-			generateCRC32AsString(key, d.SubDepth, idx)//[:d.SubDepth]
-		case 3:
-		// uses FNV1
-			generateFNV1aHash(key, d.SubDepth, idx)//[:d.SubDepth]
-	}
-	d.logs.Debug("key=%s idx='%#v'", key, *idx)
-}
+func (d *XDICK) keyIndex(key string, idx *string, idi *int64, ind *int64, hashedKey *uint64) () {
+	switch SYSMODE {
+		case MAPMODE:
+			// generate a quick hash and cuts N chars to divide into sub_dicks 0__-f__
+			switch d.HashMode {
+				case 1:
+				// use PCAS
+				*idx = fmt.Sprintf("%04x", pcashash.String(key), d.SubDepth)[:d.SubDepth]
+				case 2:
+				// use CRC32
+					generateCRC32AsString(key, d.SubDepth, idx)//[:d.SubDepth]
+				case 3:
+				// uses FNV1
+					generateFNV1aHash(key, d.SubDepth, idx)//[:d.SubDepth]
+			}
+		/*
+		case SLIMODE:
+			*idi = int64(pcashash.String(key) % d.SubCount)
+			d.expandIfNeeded(*idi)
+			hashed := d.SLIhasher(key)
+			if hashedKey != nil {
+				*hashedKey = hashed
+				return
+			}
+			//var index int
+			loops1 := 0
+			loops2 := 0
+			for i := 0; i <= 1; i++ {
+				loops1++
+				hashTable := d.SubDICKsSLI[*idi].hashTables[i]
+				if hashTable == nil {
+					d.logs.Fatal("Keyindex hashTable=nil")
+				}
+				*ind = int64(hashed & hashTable.sizemask)
+				d.logs.Info("keyIndex key='%s' *idi=%d *ind=%d hashed=%d sizemask=%d d.SubCount=%d", key, *idi, *ind, hashed, hashTable.sizemask, d.SubCount)
+				d.SubDICKsSLI[*idi].submux.Lock()
+				defer d.SubDICKsSLI[*idi].submux.Unlock()
+				for entry := hashTable.tableSLI[*ind]; entry != nil; entry = entry.next {
+					loops2++
+					if entry.key == key {
+						//if !overwrite {
+							d.logs.Debug("BREAKPOINT keyIndex [%d] entry.key==key='%s' loops1=%d loops2=%d return -1", idi, key, loops1, loops2)
+							*ind = -1
+							return
+						//}
+					}
+				}
 
-func (d *XDICK) set(key string, value string, overwrite bool) bool {
-	var idx string
-	d.KeyIndex(key, &idx)
-	d.SubDICKs[idx].submux.Lock()
-	defer d.SubDICKs[idx].submux.Unlock()
-	if !overwrite {
-		if _, containsKey := d.SubDICKs[idx].dickTable.table[key]; containsKey {
-			return false
+				if *ind == -1 || !d.isRehashing(*idi) {
+					//d.logs.Fatal("BREAKPOINT does this ever hit???")
+					break
+				}
+			}
+		*/
+	} // end switch SYSMODE
+
+	//d.logs.Debug("key=%s idx='%#v' idi='%#v' index='%#v'", key, *idx, *idi, *ind)
+} // end func KeyIndex
+
+func (d *XDICK) Set(key string, value string, overwrite bool) bool {
+	switch SYSMODE {
+		case MAPMODE:
+			var idx string
+			d.keyIndex(key, &idx, nil, nil, nil)
+			d.SubDICKsMAP[idx].submux.Lock()
+			defer d.SubDICKsMAP[idx].submux.Unlock()
+			if !overwrite {
+				if _, containsKey := d.SubDICKsMAP[idx].dickTable.tableMAP[key]; containsKey {
+					return false
+				}
+			}
+			d.SubDICKsMAP[idx].dickTable.tableMAP[key] = value
+		/*
+		case SLIMODE:
+			var idi, ind int64
+			// TODO
+			d.keyIndex(key, nil, &idi, &ind, nil)
+			d.expandIfNeeded(idi)
+			d.SubDICKsSLI[idi].submux.Lock()
+			d.addEntry(idi, ind, key, value, overwrite)
+			d.SubDICKsSLI[idi].submux.Unlock()
+		*/
+	}
+	return true
+} // end func Set
+
+/*
+func (d *XDICK) addEntry(idi int64, ind int64, key string, value string, overwrite bool) bool {
+	//d.logs.Debug("addEntry(key=%d='%s' value='%#v' X=%d", len(key), key, value, index)
+
+	if ind == -1 {
+		d.logs.Fatal(`addEntry unexpectedly found an entry with the same key when trying to add #{ %s } / #{ %s }`, key, value)
+	}
+
+	hashTable := d.mainDICK(idi)
+	if d.isRehashing(idi) {
+		d.rehashStep(idi)
+		hashTable = d.mainDICK(idi)
+		if d.isRehashing(idi) {
+			hashTable = d.rehashingTable(idi)
 		}
 	}
-	d.SubDICKs[idx].dickTable.table[key] = value
-	return true
-} // end func set
 
-func (d *XDICK) get(key string, val *string) (containsKey bool) {
-	var idx string
-	d.KeyIndex(key, &idx)
-	d.SubDICKs[idx].submux.RLock()
-	if _, containsKey = d.SubDICKs[idx].dickTable.table[key]; containsKey {
-		*val = d.SubDICKs[idx].dickTable.table[key]
+	entry := hashTable.tableSLI[ind]
+
+	for entry != nil && entry.key != key {
+		entry = entry.next
 	}
-	d.SubDICKs[idx].submux.RUnlock()
+
+	if entry == nil {
+		entry = NewDickEntry(key, value)
+		entry.next = hashTable.tableSLI[ind]
+		hashTable.tableSLI[ind] = entry
+		hashTable.used++
+		return true
+	}
+
+	return false
+} // end func addEntry
+*/
+
+func (d *XDICK) Get(key string, val *string) (containsKey bool) {
+	switch SYSMODE {
+		case MAPMODE:
+			var idx string
+			d.keyIndex(key, &idx, nil, nil, nil)
+			d.logs.Info("MAP GET getEntry key='%s' idx=%s", key, idx)
+			d.SubDICKsMAP[idx].submux.RLock()
+			if _, containsKey = d.SubDICKsMAP[idx].dickTable.tableMAP[key]; containsKey {
+				*val = d.SubDICKsMAP[idx].dickTable.tableMAP[key]
+			}
+			d.SubDICKsMAP[idx].submux.RUnlock()
+		/*
+		case SLIMODE:
+			var idi int64
+			var hk uint64
+			// TODO
+			d.keyIndex(key, nil, &idi, nil, &hk)
+			d.logs.Info("SLI GET getEntry key='%s' idi=%d hk=%d", key, idi, hk)
+			d.SubDICKsSLI[idi].submux.RLock()
+			entry := d.getEntry(idi, hk, key)
+			if entry == nil {
+				d.SubDICKsSLI[idi].submux.RUnlock()
+				return
+			}
+			*val = entry.value
+			d.SubDICKsSLI[idi].submux.RUnlock()
+		*/
+	}
 	return
-} // end func get
+} // end func Get
+/*
+func (d *XDICK) getEntry(idi int64, hashedKey uint64, key string) *DickEntry {
+	d.logs.Info("join SLI getEntry key='%s'", key)
 
-func (d *XDICK) del(key string) bool {
-	var idx string
-	d.KeyIndex(key, &idx)
-	d.SubDICKs[idx].submux.RLock()
-	_, containsKey := d.SubDICKs[idx].dickTable.table[key]
-	d.SubDICKs[idx].submux.RUnlock()
-
-	if containsKey {
-		d.SubDICKs[idx].submux.Lock()
-		delete(d.SubDICKs[idx].dickTable.table, key)
-		d.SubDICKs[idx].submux.Unlock()
+	if d.mainDICK(idi).used == 0 && d.rehashingTable(idi).used == 0 {
+		d.logs.Info("SLI getEntry key='%s' return: used is 0", key)
+		return nil
 	}
-	return containsKey
-} // end func del
+
+	//hashedKey := d.SLIhasher(key) // TODO!FIXME: hash earlier?
+
+
+	for i, hashTable := range []*DickTable{d.mainDICK(idi), d.rehashingTable(idi)} {
+		if hashTable == nil || len(hashTable.tableSLI) == 0 || (i == 1 && !d.isRehashing(idi)) {
+			continue
+		}
+		if hashTable.tableSLI == nil {
+			d.logs.Fatal("SLI getEntry hashTable.tableSLI == nil")
+		}
+		index := int64(hashedKey & hashTable.sizemask)
+		d.logs.Info("SLI getEntry hashTable.tableSLI=%d idi=%d hk=%d key='%s' index=%d", len(hashTable.tableSLI), idi, hashedKey, key, index)
+
+		if hashTable.tableSLI[index] == nil {
+			d.logs.Error("SLI getEntry hashTable.tableSLI=%d idi=%d hk=%d key='%s' hashTable.tableSLI[index=%d]==nil", len(hashTable.tableSLI), idi, hashedKey, key, index)
+			return nil
+		}
+
+		entry := hashTable.tableSLI[index]
+
+		for entry != nil {
+			if entry.key == key {
+				return entry
+			}
+			entry = entry.next
+		}
+	}
+
+	return nil
+} // end func getEntry
+*/
+func (d *XDICK) Del(key string) (containsKey bool) {
+	switch SYSMODE {
+		case MAPMODE:
+			var idx string
+			d.keyIndex(key, &idx, nil, nil, nil)
+			d.SubDICKsMAP[idx].submux.RLock()
+			_, containsKey = d.SubDICKsMAP[idx].dickTable.tableMAP[key]
+			d.SubDICKsMAP[idx].submux.RUnlock()
+			if containsKey {
+				d.SubDICKsMAP[idx].submux.Lock()
+				delete(d.SubDICKsMAP[idx].dickTable.tableMAP, key)
+				d.SubDICKsMAP[idx].submux.Unlock()
+			}
+		/*
+		case SLIMODE:
+			var idi, ind int64
+			// TODO
+			d.keyIndex(key, nil, &idi, &ind, nil)
+			containsKey =  d.delEntry(idi, ind, key)
+		*/
+	}
+	return
+} // end func Del
+
+/*
+func (d *XDICK) delEntry(idi int64, index int64, key string) (containsKey bool) {
+
+	if d.mainDICK(idi).used == 0 && d.rehashingTable(idi).used == 0 {
+		return
+	}
+
+	if d.isRehashing(idi) {
+		d.rehashStep(idi)
+	}
+
+	//hashedKey := d.SLIhasher(key) // TODO!FIXME: hash earlier!
+
+	for i, hashTable := range []*DickTable{d.mainDICK(idi), d.rehashingTable(idi)} {
+		if hashTable == nil || (i == 1 && !d.isRehashing(idi)) {
+			continue
+		}
+		//index := hashedKey & hashTable.sizemask
+		entry := hashTable.tableSLI[index]
+		var previousEntry *DickEntry
+
+		for entry != nil {
+			if entry.key == key {
+				if previousEntry != nil {
+					previousEntry.next = entry.next
+				} else {
+					hashTable.tableSLI[index] = entry.next
+				}
+				hashTable.used--
+				containsKey = true
+				return
+			}
+			previousEntry = entry
+			entry = entry.next
+		}
+	}
+
+	return
+} // end func delEntry
+*/
 
 func (d *XDICK) watchDog(idx string) {
 	//log.Printf("Booted Watchdog [%s]", idx)
@@ -170,30 +408,30 @@ func (d *XDICK) watchDog(idx string) {
 	for {
 		time.Sleep(time.Second) // TODO!FIXME setting: watchdog_timer
 
-		if d == nil || d.SubDepth == 0 || d.SubDICKs[idx] == nil {
+		if d == nil || d.SubDepth == 0 || d.SubDICKsMAP[idx] == nil {
 			// not finished booting
 			continue
 		}
 
-		if !d.SubDICKs[idx].logs.IfDebug() {
+		if !d.SubDICKsMAP[idx].logs.IfDebug() {
 			time.Sleep(59 * time.Second)
 			continue
 		}
 
 		// print some statistics
-		d.SubDICKs[idx].submux.RLock()
-		//ht := len(d.SubDICKs[idx].dickTable), // is always 2
-		ht0 := d.SubDICKs[idx].dickTable.used
+		d.SubDICKsMAP[idx].submux.RLock()
+		//ht := len(d.SubDICKsMAP[idx].dickTable), // is always 2
+		ht0 := d.SubDICKsMAP[idx].dickTable.used
 		if ht0 == 0 {
 			// subdick is empty
-			d.SubDICKs[idx].submux.RUnlock()
+			d.SubDICKsMAP[idx].submux.RUnlock()
 			continue
 		}
-		ht0cap := len(d.SubDICKs[idx].dickTable.table)
-		//ht1cap := len(d.SubDICKs[idx].dickTable[1].table)
+		ht0cap := len(d.SubDICKsMAP[idx].dickTable.tableMAP)
+		//ht1cap := len(d.SubDICKsMAP[idx].dickTable[1].table)
 		d.logs.Info("watchDog [%d] ht0=%d/%d", idx, ht0, ht0cap)
-		d.SubDICKs[idx].submux.RUnlock()
-		////d.logs.Debug("watchDog [%d] SubDICKs='\n   ---> %#v", idx, d.SubDICKs[idx])
+		d.SubDICKsMAP[idx].submux.RUnlock()
+		//d.logs.Debug("watchDog [%d] SubDICKs='\n   ---> %#v", idx, d.SubDICKsMAP[idx])
 	}
 } // end func watchDog
 

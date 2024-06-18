@@ -23,6 +23,8 @@ var (
 	flag_pprofweb   string
 	flag_profcpu    bool
 	flag_hashmode   int
+	flag_sysmode    int
+	flag_loglevel   string
 ) // end var
 
 func main() {
@@ -33,11 +35,28 @@ func main() {
 	flag.StringVar(&flag_pprofweb, "pprofweb", "", "PPROF WEB: [ (addr):port ]\n     LOCAL '127.0.0.1:1234' OR '[::1]:1234'\n     PUBLIC/WORLD ':1234' OR 'IP4:PORT' OR '[IP6]:PORT'")
 	flag.BoolVar(&flag_profcpu, "profcpu", false, "boot with CPU profiling")
 	flag.IntVar(&flag_hashmode, "hashmode", 1, "[ 1=PCAS | 2=CRC32 | 3=FNV1A ]")
+	flag.IntVar(&flag_sysmode, "sysmode", 1, "[ 1=MAP | 2=SLI ]")
+	flag.StringVar(&flag_loglevel, "loglevel", "", "[ INFO | DEBUG ]")
 	flag.Parse()
 
+	loglevel := ilog.GetLOGLEVEL(flag_loglevel)
+	if loglevel == -1 {
+		loglevel = ilog.GetEnvLOGLEVEL()
+	}
 	// loading logger prints first line LOGLEVEL="XX" to console but will never showup in logfile!
-	logs := ilog.NewLogger(ilog.GetEnvLOGLEVEL(), flag_logfile)
+	logs := ilog.NewLogger(loglevel, flag_logfile)
+
+	switch flag_sysmode {
+		case database.MAPMODE:
+			database.SYSMODE = database.MAPMODE
+		case database.SLIMODE:
+			database.SYSMODE = database.SLIMODE
+		default:
+			logs.Fatal("invalid sysmode")
+	}
+
 	cfg, sub_dicks := server.NewViperConf(flag_configfile, logs)
+
 
 	db := database.NewDICK(logs, sub_dicks, flag_hashmode)
 	srv := server.NewFactory().NewNDBServer(cfg, server.NewXNDBServer(db, logs), logs, stop_chan, wg, db)
