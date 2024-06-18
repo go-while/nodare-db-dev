@@ -577,7 +577,7 @@ readlines:
 				cli.tp.PrintfLine(CAN)
 				break readlines
 			}
-			if state == 0
+			if state == 0 {
 				// goes up to mode handling
 				continue readlines
 			}
