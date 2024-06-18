@@ -109,7 +109,6 @@ func generateFNV1aHash(input string, sd int, output *string) {
 }
 
 func (d *XDICK) KeyIndex(key string, idx *string) {
-	d.HashMode = 1
 	// generate a quick hash and cuts N chars to divide into sub_dicks 0__-f__
 	switch d.HashMode {
 		case 1:
