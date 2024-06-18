@@ -49,8 +49,8 @@ func main() {
 	switch flag_sysmode {
 		case database.MAPMODE:
 			database.SYSMODE = database.MAPMODE
-		case database.SLIMODE:
-			database.SYSMODE = database.SLIMODE
+		//case database.SLIMODE:
+		//	database.SYSMODE = database.SLIMODE
 		default:
 			logs.Fatal("invalid sysmode")
 	}

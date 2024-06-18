@@ -2,12 +2,10 @@ package database
 
 
 import (
-	"encoding/binary"
 	"fmt"
 	"github.com/go-while/nodare-db-dev/logger"
 	pcashash "github.com/go-while/nodare-db-dev/pcas_hash"
 	"hash/fnv"
-	"math/rand"
 	"hash/crc32"
 	//"strconv"
 	"sync"
@@ -17,20 +15,16 @@ import (
 var SYSMODE int
 
 const (
+	INITIAL_SIZE = int64(1024*1024)
+	MAX_SIZE     = 1 << 63
 	MAPMODE = 1
 	SLIMODE = 2
-	INITIAL_SIZE = int64(128)
-	//MAX_SIZE     = 1 << 63
-	//HASH_siphash = 0x01
+	HASH_siphash = 0x01
 	HASH_FNV32A  = 0x02
 	HASH_FNV64A  = 0x03
 )
 
 var AVAIL_SUBDICKS = []int{16, 256, 4096, 65536}
-
-var key0, key1 uint64 // why
-var once sync.Once // why
-var SALT [16]byte // why
 
 type XDICK struct {
 	// mainmux is not used anywhere but exists
@@ -38,10 +32,10 @@ type XDICK struct {
 	//   subdicks can lock XDICK
 	booted   int64 // timestamp
 	mainmux  sync.RWMutex
-	SubDICKsSLI []*SubDICK // idi is index to [] holding 10, 100, 1000, 10000 subdicks
 	SubDICKsMAP map[string]*SubDICK // key=string=idx
+	SubDICKsSLI []*SubDICK
 	SubDepth int
-	SubCount uint32 // used with SLI
+	SubCount int
 	HashMode int
 	logs     ilog.ILOG
 	pcas     *pcashash.Hash // hash go objects
@@ -51,8 +45,6 @@ type SubDICK struct {
 	parent     sync.RWMutex
 	submux     sync.RWMutex
 	dickTable  *DickTable // MAP
-	hashTables [2]*DickTable // SLI
-	rehashidi  int64 // SLI
 	logs       ilog.ILOG
 }
 
@@ -63,7 +55,7 @@ func NewXDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDICK {
 	xdick := &XDICK{
 		pcas: pcashash.New(),
 		mainmux:  mainmux,
-		SubCount: uint32(sub_dicks),
+		SubCount: sub_dicks,
 		HashMode: hashmode, // must not change on runtime
 		logs:     logs,
 	}
@@ -96,31 +88,6 @@ func NewXDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDICK {
 				}
 				xdick.SubDICKsMAP[idx] = subDICK
 			} // end for idx
-		/*
-		case SLIMODE:
-			switch sub_dicks {
-				case 100:
-					// pass
-				case 1000:
-					// pass
-				case 10000:
-					// pass
-				default:
-					logs.Fatal("invalid sub_dicks=%d! available: 100, 1000, 10000", sub_dicks)
-			}
-			//xdick.SubDICKsSLI = make([]*SubDICK, sub_dicks)
-			for i := 0; i < sub_dicks; i++ {
-				subDICK := &SubDICK{
-					parent:     mainmux,
-					hashTables: [2]*DickTable{NewDickTable(0), NewDickTable(0)},
-					rehashidi:  -1,
-					//logs:       logs,
-				}
-				xdick.SubDICKsSLI = append(xdick.SubDICKsSLI, subDICK)
-				//xdick.SubDICKsSLI[i] = subDICK
-			} // end for
-			logs.Debug("Created subDICKs %d/%d ", len(xdick.SubDICKsSLI), sub_dicks)
-		*/
 	}
 
 	//for idx := range combinations {
@@ -161,45 +128,9 @@ func (d *XDICK) keyIndex(key string, idx *string, idi *int64, ind *int64, hashed
 				// uses FNV1
 					generateFNV1aHash(key, d.SubDepth, idx)//[:d.SubDepth]
 			}
-		/*
-		case SLIMODE:
-			*idi = int64(pcashash.String(key) % d.SubCount)
-			d.expandIfNeeded(*idi)
-			hashed := d.SLIhasher(key)
-			if hashedKey != nil {
-				*hashedKey = hashed
-				return
-			}
-			//var index int
-			loops1 := 0
-			loops2 := 0
-			for i := 0; i <= 1; i++ {
-				loops1++
-				hashTable := d.SubDICKsSLI[*idi].hashTables[i]
-				if hashTable == nil {
-					d.logs.Fatal("Keyindex hashTable=nil")
-				}
-				*ind = int64(hashed & hashTable.sizemask)
-				d.logs.Info("keyIndex key='%s' *idi=%d *ind=%d hashed=%d sizemask=%d d.SubCount=%d", key, *idi, *ind, hashed, hashTable.sizemask, d.SubCount)
-				d.SubDICKsSLI[*idi].submux.Lock()
-				defer d.SubDICKsSLI[*idi].submux.Unlock()
-				for entry := hashTable.tableSLI[*ind]; entry != nil; entry = entry.next {
-					loops2++
-					if entry.key == key {
-						//if !overwrite {
-							d.logs.Debug("BREAKPOINT keyIndex [%d] entry.key==key='%s' loops1=%d loops2=%d return -1", idi, key, loops1, loops2)
-							*ind = -1
-							return
-						//}
-					}
-				}
 
-				if *ind == -1 || !d.isRehashing(*idi) {
-					//d.logs.Fatal("BREAKPOINT does this ever hit???")
-					break
-				}
-			}
-		*/
+		case SLIMODE:
+			d.logs.Fatal("not implemented")
 	} // end switch SYSMODE
 
 	//d.logs.Debug("key=%s idx='%#v' idi='%#v' index='%#v'", key, *idx, *idi, *ind)
@@ -218,54 +149,13 @@ func (d *XDICK) Set(key string, value string, overwrite bool) bool {
 				}
 			}
 			d.SubDICKsMAP[idx].dickTable.tableMAP[key] = value
-		/*
+
 		case SLIMODE:
-			var idi, ind int64
-			// TODO
-			d.keyIndex(key, nil, &idi, &ind, nil)
-			d.expandIfNeeded(idi)
-			d.SubDICKsSLI[idi].submux.Lock()
-			d.addEntry(idi, ind, key, value, overwrite)
-			d.SubDICKsSLI[idi].submux.Unlock()
-		*/
+			d.logs.Fatal("not implemented")
+
 	}
 	return true
 } // end func Set
-
-/*
-func (d *XDICK) addEntry(idi int64, ind int64, key string, value string, overwrite bool) bool {
-	//d.logs.Debug("addEntry(key=%d='%s' value='%#v' X=%d", len(key), key, value, index)
-
-	if ind == -1 {
-		d.logs.Fatal(`addEntry unexpectedly found an entry with the same key when trying to add #{ %s } / #{ %s }`, key, value)
-	}
-
-	hashTable := d.mainDICK(idi)
-	if d.isRehashing(idi) {
-		d.rehashStep(idi)
-		hashTable = d.mainDICK(idi)
-		if d.isRehashing(idi) {
-			hashTable = d.rehashingTable(idi)
-		}
-	}
-
-	entry := hashTable.tableSLI[ind]
-
-	for entry != nil && entry.key != key {
-		entry = entry.next
-	}
-
-	if entry == nil {
-		entry = NewDickEntry(key, value)
-		entry.next = hashTable.tableSLI[ind]
-		hashTable.tableSLI[ind] = entry
-		hashTable.used++
-		return true
-	}
-
-	return false
-} // end func addEntry
-*/
 
 func (d *XDICK) Get(key string, val *string) (containsKey bool) {
 	switch SYSMODE {
@@ -278,65 +168,12 @@ func (d *XDICK) Get(key string, val *string) (containsKey bool) {
 				*val = d.SubDICKsMAP[idx].dickTable.tableMAP[key]
 			}
 			d.SubDICKsMAP[idx].submux.RUnlock()
-		/*
 		case SLIMODE:
-			var idi int64
-			var hk uint64
-			// TODO
-			d.keyIndex(key, nil, &idi, nil, &hk)
-			d.logs.Info("SLI GET getEntry key='%s' idi=%d hk=%d", key, idi, hk)
-			d.SubDICKsSLI[idi].submux.RLock()
-			entry := d.getEntry(idi, hk, key)
-			if entry == nil {
-				d.SubDICKsSLI[idi].submux.RUnlock()
-				return
-			}
-			*val = entry.value
-			d.SubDICKsSLI[idi].submux.RUnlock()
-		*/
+			d.logs.Fatal("not implemented")
 	}
 	return
 } // end func Get
-/*
-func (d *XDICK) getEntry(idi int64, hashedKey uint64, key string) *DickEntry {
-	d.logs.Info("join SLI getEntry key='%s'", key)
 
-	if d.mainDICK(idi).used == 0 && d.rehashingTable(idi).used == 0 {
-		d.logs.Info("SLI getEntry key='%s' return: used is 0", key)
-		return nil
-	}
-
-	//hashedKey := d.SLIhasher(key) // TODO!FIXME: hash earlier?
-
-
-	for i, hashTable := range []*DickTable{d.mainDICK(idi), d.rehashingTable(idi)} {
-		if hashTable == nil || len(hashTable.tableSLI) == 0 || (i == 1 && !d.isRehashing(idi)) {
-			continue
-		}
-		if hashTable.tableSLI == nil {
-			d.logs.Fatal("SLI getEntry hashTable.tableSLI == nil")
-		}
-		index := int64(hashedKey & hashTable.sizemask)
-		d.logs.Info("SLI getEntry hashTable.tableSLI=%d idi=%d hk=%d key='%s' index=%d", len(hashTable.tableSLI), idi, hashedKey, key, index)
-
-		if hashTable.tableSLI[index] == nil {
-			d.logs.Error("SLI getEntry hashTable.tableSLI=%d idi=%d hk=%d key='%s' hashTable.tableSLI[index=%d]==nil", len(hashTable.tableSLI), idi, hashedKey, key, index)
-			return nil
-		}
-
-		entry := hashTable.tableSLI[index]
-
-		for entry != nil {
-			if entry.key == key {
-				return entry
-			}
-			entry = entry.next
-		}
-	}
-
-	return nil
-} // end func getEntry
-*/
 func (d *XDICK) Del(key string) (containsKey bool) {
 	switch SYSMODE {
 		case MAPMODE:
@@ -350,57 +187,13 @@ func (d *XDICK) Del(key string) (containsKey bool) {
 				delete(d.SubDICKsMAP[idx].dickTable.tableMAP, key)
 				d.SubDICKsMAP[idx].submux.Unlock()
 			}
-		/*
+
 		case SLIMODE:
-			var idi, ind int64
-			// TODO
-			d.keyIndex(key, nil, &idi, &ind, nil)
-			containsKey =  d.delEntry(idi, ind, key)
-		*/
+			d.logs.Fatal("not implemented")
+
 	}
 	return
 } // end func Del
-
-/*
-func (d *XDICK) delEntry(idi int64, index int64, key string) (containsKey bool) {
-
-	if d.mainDICK(idi).used == 0 && d.rehashingTable(idi).used == 0 {
-		return
-	}
-
-	if d.isRehashing(idi) {
-		d.rehashStep(idi)
-	}
-
-	//hashedKey := d.SLIhasher(key) // TODO!FIXME: hash earlier!
-
-	for i, hashTable := range []*DickTable{d.mainDICK(idi), d.rehashingTable(idi)} {
-		if hashTable == nil || (i == 1 && !d.isRehashing(idi)) {
-			continue
-		}
-		//index := hashedKey & hashTable.sizemask
-		entry := hashTable.tableSLI[index]
-		var previousEntry *DickEntry
-
-		for entry != nil {
-			if entry.key == key {
-				if previousEntry != nil {
-					previousEntry.next = entry.next
-				} else {
-					hashTable.tableSLI[index] = entry.next
-				}
-				hashTable.used--
-				containsKey = true
-				return
-			}
-			previousEntry = entry
-			entry = entry.next
-		}
-	}
-
-	return
-} // end func delEntry
-*/
 
 func (d *XDICK) watchDog(idx string) {
 	//log.Printf("Booted Watchdog [%s]", idx)
@@ -435,18 +228,6 @@ func (d *XDICK) watchDog(idx string) {
 	}
 } // end func watchDog
 
-// GenerateSALT generates a fixed slice of 16 maybe NOT really random bytes
-func (d *XDICK) GenerateSALT() {
-	once.Do(func() {
-		rand.Seed(time.Now().UnixNano())
-		cs := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-		for i := 0; i < 16; i++ {
-			SALT[i] = cs[rand.Intn(len(cs))]
-		}
-		key0, key1 = d.SipHashSplit(SALT)
-	})
-}
-
 var HEXCHARS = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"}
 // generateHexCombinations generates all combinations of hex characters up to the given depth.
 // It takes the current depth, the current combination being built, and a pointer to a slice to store the results.
@@ -461,13 +242,3 @@ func generateHexCombinations(depth int, current string, combinations *[]string) 
 		generateHexCombinations(depth-1, current+char, combinations)
 	}
 } // end func generateHexCombinations
-
-func (d *XDICK) SipHashSplit(key [16]byte) (uint64, uint64) {
-	if len(key) == 0 || len(key) < 16 {
-		d.logs.Error("ERROR split len(key)=%d", len(key))
-		return 0, 0
-	}
-	key0 := binary.LittleEndian.Uint64(key[:8])
-	key1 := binary.LittleEndian.Uint64(key[8:16])
-	return key0, key1
-}
