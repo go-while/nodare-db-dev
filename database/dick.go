@@ -162,7 +162,7 @@ func (d *XDICK) Get(key string, val *string) (containsKey bool) {
 		case MAPMODE:
 			var idx string
 			d.keyIndex(key, &idx, nil, nil, nil)
-			d.logs.Info("MAP GET getEntry key='%s' idx=%s", key, idx)
+			d.logs.Debug("MAP GET getEntry key='%s' idx=%s", key, idx)
 			d.SubDICKsMAP[idx].submux.RLock()
 			if _, containsKey = d.SubDICKsMAP[idx].dickTable.tableMAP[key]; containsKey {
 				*val = d.SubDICKsMAP[idx].dickTable.tableMAP[key]
