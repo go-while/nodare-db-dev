@@ -2,17 +2,20 @@ package database
 
 
 import (
+	"encoding/binary"
 	"fmt"
 	"github.com/go-while/nodare-db-dev/logger"
+	"github.com/dchest/siphash"
 	pcashash "github.com/go-while/nodare-db-dev/pcas_hash"
+	xxhash "github.com/cespare/xxhash"
 	"hash/fnv"
+	"math/rand"
+	//crand "crypto/rand"
 	"hash/crc32"
 	//"strconv"
 	"sync"
 	"time"
 )
-
-var SYSMODE int
 
 const (
 	INITIAL_SIZE = int64(1024*1024)
@@ -22,9 +25,19 @@ const (
 	HASH_siphash = 0x01
 	HASH_FNV32A  = 0x02
 	HASH_FNV64A  = 0x03
+	HASH_XXHASH  = 0x04
+	HASH_PCAS    = 0x05
 )
 
-var AVAIL_SUBDICKS = []int{16, 256, 4096, 65536, 10, 100, 1000, 10000}
+var (
+	once sync.Once
+	AVAIL_SUBDICKS = []int{16, 256, 4096, 65536, 10, 100, 1000, 10000}
+	AVAIL_HASHER = []int{HASH_siphash, HASH_FNV32A, HASH_FNV64A, HASH_XXHASH}
+	SYSMODE int
+	HASHER = HASH_XXHASH
+	key0, key1 uint64
+	SALT [16]byte
+)
 
 type XDICK struct {
 	// mainmux is not used anywhere but exists
@@ -120,47 +133,6 @@ func NewXDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDICK {
 	return xdick
 } // end func NewXDICK
 
-//func (d *XDICK) mainDICK(idi int) *DickTable {
-//	return d.SubDICKsSLI[idi].dickTable
-//}
-
-func generateCRC32AsString(input string, sd int, output *string) {
-	byteSlice := []byte(input)
-	hash := crc32.NewIEEE()
-	hash.Write(byteSlice)
-	checksum := hash.Sum32()
-	*output = fmt.Sprintf("%04x", checksum)[:sd]
-}
-
-func generateFNV1aHash(input string, sd int, output *string) {
-	hash := fnv.New32a()
-	hash.Write([]byte(input))
-	hashValue := hash.Sum32()
-	*output = fmt.Sprintf("%04x", hashValue)[:sd]
-}
-
-// main hasher func
-func (d *XDICK) hasher(any string) uint64 {
-	HASHER := HASH_FNV64A
-	switch HASHER {
-	//case HASH_siphash:
-	//	// sipHashDigest calculates the SipHash-2-4 digest of the given message using the provided key.
-	//	return siphash.Hash(key0, key1, []byte(any))
-
-	case HASH_FNV32A:
-		hash := fnv.New32a()
-		hash.Write([]byte(any))
-		return uint64(hash.Sum32())
-
-	case HASH_FNV64A:
-		hash := fnv.New64a()
-		hash.Write([]byte(any))
-		return hash.Sum64()
-	}
-	d.logs.Fatal("No HASHER defined! HASHER=%d %x", HASHER, HASHER)
-	return 0
-} // end func hasher
-
 func (d *XDICK) keyIndex(key string, idx *string, idi *int64, ind *int64, hk *uint64) () {
 	switch SYSMODE {
 		case MAPMODE:
@@ -174,12 +146,13 @@ func (d *XDICK) keyIndex(key string, idx *string, idi *int64, ind *int64, hk *ui
 					generateCRC32AsString(key, d.SubDepth, idx)//[:d.SubDepth]
 				case 3:
 				// uses FNV1
-					generateFNV1aHash(key, d.SubDepth, idx)//[:d.SubDepth]
+					generateFNV1aHash(key, d.SubDepth, idx)//[:d.SubDept
+				default:
+					d.logs.Fatal("Invalid HashMode")
 			}
 
 		case SLIMODE:
-			//hashedKey := d.hasher(key)
-			hashedKey := uint64(pcashash.String(key))
+			hashedKey := d.hasher(key)
 			if hk != nil {
 				*hk = hashedKey
 			}
@@ -191,6 +164,37 @@ func (d *XDICK) keyIndex(key string, idx *string, idi *int64, ind *int64, hk *ui
 
 	//d.logs.Debug("key=%s idx='%#v' idi='%#v' index='%#v'", key, *idx, *idi, *ind)
 } // end func KeyIndex
+
+// main hasher func
+func (d *XDICK) hasher(key string) uint64 {
+	switch d.HashMode {
+
+	case HASH_siphash:
+		//sipHashDigest calculates the SipHash-2-4 digest of the given message using the provided key.
+		return siphash.Hash(key0, key1, []byte(key))
+
+	case HASH_FNV32A:
+		hash := fnv.New32a()
+		hash.Write([]byte(key))
+		return uint64(hash.Sum32())
+
+	case HASH_FNV64A:
+		hash := fnv.New64a()
+		hash.Write([]byte(key))
+		return hash.Sum64()
+
+	case HASH_XXHASH:
+		return xxhash.Sum64String(key)
+
+	case HASH_PCAS:
+		return uint64(pcashash.String(key))
+
+	default:
+		d.logs.Fatal("Invalid HashMode")
+	}
+	d.logs.Fatal("No HASHER defined! HASHER=%d %x", HASHER, HASHER)
+	return 0
+} // end func hasher
 
 func (d *XDICK) Set(key string, value string, overwrite bool) bool {
 	switch SYSMODE {
@@ -227,38 +231,42 @@ func (d *XDICK) Set(key string, value string, overwrite bool) bool {
 } // end func Set
 
 func (d *XDICK) SetEntry(idi int64, ind int64, key string, value string, overwrite bool) (exists bool, added bool) {
-	d.SubDICKsSLI[idi].dickTable.tmux.Lock()
-	defer d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
+
 	d.logs.Debug("SetEntry [%d:%d] k='%v' v='%v'", idi, ind, key, value)
 
-	if d.GetEntry(idi, ind, false) == nil {
+	if d.GetEntry(idi, ind, true) == nil {
 		// create new entry
-		d.SubDICKsSLI[idi].dickTable.tableSLI[ind] = &DickEntry{key: key, value: value}
-		added = true
-		d.usedInc(idi)
-		d.logs.Debug("SetEntry [%d:%d] NEW key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, key, exists, overwrite, added, d.SubDICKsSLI[idi].dickTable.used)
-		return
+		d.SubDICKsSLI[idi].dickTable.tmux.Lock()
+		if d.SubDICKsSLI[idi].dickTable.tableSLI[ind] == nil {
+			d.SubDICKsSLI[idi].dickTable.tableSLI[ind] = &DickEntry{key: key, value: value}
+			d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
+			added = true
+			d.usedInc(idi)
+			d.logs.Debug("SetEntry [%d:%d] NEW key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, key, exists, overwrite, added, d.SubDICKsSLI[idi].dickTable.used)
+			return
+		}
+		d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
 	}
 
 	var load int64
 	// find entries matching our key to set new value
 	var prev *DickEntry = nil
-	for entry := d.GetEntry(idi, ind, false); entry != nil; entry = entry.next {
-		//entry.emux.RLock()
+	for entry := d.GetEntry(idi, ind, true); entry != nil; entry = entry.next {
+		entry.emux.RLock()
 		if entry.key == "" {
 			d.logs.Fatal("GetEntry entry.key empty?!")
 		}
 		if entry.key != key {
 			load++
 			prev = entry
-			//entry.emux.RUnlock()
+			entry.emux.RUnlock()
 			continue
 		}
-		//entry.emux.RUnlock()
+		entry.emux.RUnlock()
 		// got match
 		if !overwrite {
 			exists = true
-			d.logs.Warn("SetEntry [%d:%d] RET load=%d key='%s' exists=%t overwrite=%t added=%t", idi, ind, load, key, exists, overwrite, added)
+			d.logs.Debug("SetEntry [%d:%d] RET load=%d key='%s' exists=%t overwrite=%t added=%t", idi, ind, load, key, exists, overwrite, added)
 			return
 		}
 		entry.emux.Lock()
@@ -341,6 +349,7 @@ func (d *XDICK) Del(key string) (bool) {
 			d.logs.Info("DelEntry key='%s' idi=%d ind=%d", key, idi, ind)
 			d.SubDICKsSLI[idi].dickTable.tmux.Lock()
 			defer d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
+
 			for entry := d.GetEntry(idi, ind, false); entry != nil; entry = entry.next {
 				if entry.key != key {
 					continue
@@ -487,3 +496,40 @@ func (d *XDICK) usedInc(idi int64) {
 func (d *XDICK) usedDec(idi int64) {
 	d.SubDICKsSLI[idi].dickTable.used--
 } // end func usedDecrease
+
+// GenerateSALT generates a fixed slice of 16 maybe NOT really random bytes
+func (d *XDICK) GenerateSALT() {
+	once.Do(func() {
+		rand.Seed(time.Now().UnixNano())
+		cs := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+		for i := 0; i < 16; i++ {
+			SALT[i] = cs[rand.Intn(len(cs))]
+		}
+		key0, key1 = d.split(SALT)
+	})
+}
+
+func (d *XDICK) split(key [16]byte) (uint64, uint64) {
+	if len(key) == 0 || len(key) < 16 {
+		d.logs.Error("ERROR split len(key)=%d", len(key))
+		return 0, 0
+	}
+	key0 := binary.LittleEndian.Uint64(key[:8])
+	key1 := binary.LittleEndian.Uint64(key[8:16])
+	return key0, key1
+}
+
+func generateCRC32AsString(input string, sd int, output *string) {
+	byteSlice := []byte(input)
+	hash := crc32.NewIEEE()
+	hash.Write(byteSlice)
+	checksum := hash.Sum32()
+	*output = fmt.Sprintf("%04x", checksum)[:sd]
+}
+
+func generateFNV1aHash(input string, sd int, output *string) {
+	hash := fnv.New32a()
+	hash.Write([]byte(input))
+	hashValue := hash.Sum32()
+	*output = fmt.Sprintf("%04x", hashValue)[:sd]
+}

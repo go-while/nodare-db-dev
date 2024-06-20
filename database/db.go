@@ -12,7 +12,11 @@ type XDatabase struct {
 }
 
 func NewDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDatabase {
-	xdick := NewXDICK(logs, sub_dicks,hashmode)
+
+	xdick := NewXDICK(logs, sub_dicks, hashmode)
+	if SYSMODE == 2 && hashmode == HASH_siphash {
+		xdick.GenerateSALT()
+	}
 	db := &XDatabase{
 		XDICK: xdick,
 		BootT: time.Now().Unix(),
