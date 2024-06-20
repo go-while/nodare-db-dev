@@ -79,7 +79,6 @@ const EOM = string(0x19) // End of medium 		// 25
 const SUB = string(0x20) // Substitute  		// 26
 const ESC = string(0x1B) // Escape 				// 27
 
-
 // VIPER CONFIG DEFAULTS
 
 const V_DEFAULT_SUB_DICKS = "100"

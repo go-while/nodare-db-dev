@@ -5,8 +5,8 @@ import (
 	"io"
 	"log"
 	"os"
-	"sync"
 	"strings"
+	"sync"
 )
 
 const (

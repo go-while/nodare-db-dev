@@ -5,35 +5,35 @@
 package main
 
 import (
+	crand "crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"github.com/go-while/nodare-db-dev/client/clilib"
 	"github.com/go-while/nodare-db-dev/logger"
 	"log"
-	"encoding/hex"
 	"os"
 	"sync"
 	"time"
-	crand "crypto/rand"
 )
 
 var (
-	wg       sync.WaitGroup
-	daemon   bool
-	addr     string
-	sock     string
-	mode     int // mode=1=http(s) || mode = 2 raw tcp (with tls)
-	ssl      bool
-	items    int
-	rounds   int
-	parallel int
-	startint int
-	runtest  bool // runs a client internal test after connecting (not implemented)
-	randomize  bool
-	logfile  string
-	keylen  int
-	vallen  int
-	overwrite  bool
+	wg        sync.WaitGroup
+	daemon    bool
+	addr      string
+	sock      string
+	mode      int // mode=1=http(s) || mode = 2 raw tcp (with tls)
+	ssl       bool
+	items     int
+	rounds    int
+	parallel  int
+	startint  int
+	runtest   bool // runs a client internal test after connecting (not implemented)
+	randomize bool
+	logfile   string
+	keylen    int
+	vallen    int
+	overwrite bool
 )
 
 func main() {
@@ -64,35 +64,35 @@ func main() {
 	 */
 
 	/*
-	netCli, err := client.NewCli(&client.Options{
+		netCli, err := client.NewCli(&client.Options{
 
-	netCli, err := cliHandler.NewCli(&client.Options{
-		SSL:        ssl,
-		Addr:       addr,
-		Mode:       mode,
-		StopChan:   stop_chan,
-		Daemon:     daemon,
-		RunTest:    runtest,
-		WG:         wg,
-		Logs:       logs,
-	})
-	if netCli == nil || err != nil {
-		log.Printf("ERROR netCli='%v' err='%v'", netCli, err)
-		return
-	}
-	//log.Printf("netCli='%#v'", netCli)
+		netCli, err := cliHandler.NewCli(&client.Options{
+			SSL:        ssl,
+			Addr:       addr,
+			Mode:       mode,
+			StopChan:   stop_chan,
+			Daemon:     daemon,
+			RunTest:    runtest,
+			WG:         wg,
+			Logs:       logs,
+		})
+		if netCli == nil || err != nil {
+			log.Printf("ERROR netCli='%v' err='%v'", netCli, err)
+			return
+		}
+		//log.Printf("netCli='%#v'", netCli)
 	*/
 
 	// defines opts once for all connections
 	clientOpts := &client.Options{
-		SSL:        ssl,
-		Addr:       addr,
-		Mode:       mode,
-		StopChan:   stop_chan,
-		Daemon:     daemon,
-		RunTest:    runtest,
-		WG:         wg,
-		Logs:       logs,
+		SSL:      ssl,
+		Addr:     addr,
+		Mode:     mode,
+		StopChan: stop_chan,
+		Daemon:   daemon,
+		RunTest:  runtest,
+		WG:       wg,
+		Logs:     logs,
 	}
 
 	cliChan := make(chan *client.Client, parallel)
@@ -112,17 +112,17 @@ func main() {
 			logs.Info("parChan got lock: start insert test r=%d/%d", r, rounds)
 			var netCli *client.Client
 			select {
-				case netCli = <- cliChan:
-					logs.Info("insert test: got open netCli")
-					// pass
-				default:
-					// no conn in cliChan? establish new!
-					newnetCli, err := cliHandler.NewCli(clientOpts)
-					if newnetCli == nil || err != nil {
-						logs.Error("ERROR netCli='%v' err='%v'", newnetCli, err)
-						return
-					}
-					netCli = newnetCli
+			case netCli = <-cliChan:
+				logs.Info("insert test: got open netCli")
+				// pass
+			default:
+				// no conn in cliChan? establish new!
+				newnetCli, err := cliHandler.NewCli(clientOpts)
+				if newnetCli == nil || err != nil {
+					logs.Error("ERROR netCli='%v' err='%v'", newnetCli, err)
+					return
+				}
+				netCli = newnetCli
 			}
 			testmap := make(map[string]string)
 			logs.Info("Launch insert test round=%d/%d", r, rounds)
@@ -133,28 +133,28 @@ func main() {
 				var key, val, resp string
 				//var rkey, rval string
 				switch randomize {
-					case true:
-						// use random key:val and pass K:v to capturemaps to test later
-						DevUrandomString(keylen, &key)
-						DevUrandomString(vallen, &val)
-						key = fmt.Sprintf("%s-r%d-%d", key, r, startint)
-						//key = fmt.Sprintf("%s-r%d-%d", rkey, r, startint)
-						//val = fmt.Sprintf("%s-r%d-%d", rval, r, startint)
-					case false:
-						// use upcounting / startint key:val
-						// %010 leftpads startint and round with 10 zeroes, like 17 => 0000000017
-						key = fmt.Sprintf("%d_Atestkey%010d-r-%010d", startint, startint, r)
-						val = fmt.Sprintf("%d_aTestVal%010d-r-%010d",startint, startint, r)
+				case true:
+					// use random key:val and pass K:v to capturemaps to test later
+					DevUrandomString(keylen, &key)
+					DevUrandomString(vallen, &val)
+					key = fmt.Sprintf("%s-r%d-%d", key, r, startint)
+					//key = fmt.Sprintf("%s-r%d-%d", rkey, r, startint)
+					//val = fmt.Sprintf("%s-r%d-%d", rval, r, startint)
+				case false:
+					// use upcounting / startint key:val
+					// %010 leftpads startint and round with 10 zeroes, like 17 => 0000000017
+					key = fmt.Sprintf("%d_Atestkey%010d-r-%010d", startint, startint, r)
+					val = fmt.Sprintf("%d_aTestVal%010d-r-%010d", startint, startint, r)
 				}
 
 				switch netCli.Mode {
-					case 1:
-						// http mode
-						err = netCli.HTTP_Set(key, val, &resp)
-					case 2:
-						// sock mode
-						// TODO! add test for SetMany
-						err = netCli.SOCK_Set(key, val, &resp, overwrite, &exists)
+				case 1:
+					// http mode
+					err = netCli.HTTP_Set(key, val, &resp)
+				case 2:
+					// sock mode
+					// TODO! add test for SetMany
+					err = netCli.SOCK_Set(key, val, &resp, overwrite, &exists)
 				}
 				if err != nil {
 					logs.Fatal("ERROR Set key='%s' => val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
@@ -189,7 +189,7 @@ func main() {
 	logs.Info("wait for SetDoneChan")
 	setdone := 0
 	for {
-		<- SetDoneChan
+		<-SetDoneChan
 		setdone++
 		if setdone == rounds {
 			logs.Info("OK setdone=%d rounds=%d", setdone, rounds)
@@ -209,17 +209,17 @@ func main() {
 				parChan <- struct{}{} // locks parallel
 				var netCli *client.Client
 				select {
-					case netCli = <- cliChan:
-						logs.Info("check test: got open netCli")
-						// pass
-					default:
-						// no conn in cliChan? establish new!
-						newnetCli, err := cliHandler.NewCli(clientOpts)
-						if newnetCli == nil || err != nil {
-							logs.Error("ERROR netCli='%v' err='%v'", newnetCli, err)
-							return
-						}
-						netCli = newnetCli
+				case netCli = <-cliChan:
+					logs.Info("check test: got open netCli")
+					// pass
+				default:
+					// no conn in cliChan? establish new!
+					newnetCli, err := cliHandler.NewCli(clientOpts)
+					if newnetCli == nil || err != nil {
+						logs.Error("ERROR netCli='%v' err='%v'", newnetCli, err)
+						return
+					}
+					netCli = newnetCli
 				}
 				var err error
 				var checked int
@@ -229,13 +229,13 @@ func main() {
 					checkkey = fmt.Sprintf("%d_Atestkey%010d-r-%010d", startint, startint, r)
 					checkval = fmt.Sprintf("%d_aTestVal%010d-r-%010d", startint, startint, r)
 					switch netCli.Mode {
-						case 1:
-							// http mode
-							err = netCli.HTTP_Get(checkkey, &retval, &found) // http Get Key: return val is passed as pointer!
-						case 2:
-							// sock mode
-							// TODO! add test for GetMany
-							err = netCli.SOCK_Get(checkkey, &retval, &nfk, &found) // socket Get key: return val is passed as pointer!
+					case 1:
+						// http mode
+						err = netCli.HTTP_Get(checkkey, &retval, &found) // http Get Key: return val is passed as pointer!
+					case 2:
+						// sock mode
+						// TODO! add test for GetMany
+						err = netCli.SOCK_Get(checkkey, &retval, &nfk, &found) // socket Get key: return val is passed as pointer!
 					}
 					if err != nil {
 						log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", checkkey, err, netCli.Mode, nfk, found)
@@ -250,7 +250,7 @@ func main() {
 				cliChan <- netCli // return netCli
 				GetDoneChan <- struct{}{}
 				RetIntChan <- checked // returns checked amount to sum later
-				<- parChan
+				<-parChan
 				logs.Info("<- check test !random r=%d returned parChan", r)
 			}(cliHandler, clientOpts, r, rounds, items, parChan, cliChan, MapRetChan, startint, randomize, SetDoneChan, GetDoneChan) // end go func
 		} // end for rounds
@@ -259,7 +259,7 @@ func main() {
 		logs.Info("wait for GetDoneChan !random")
 		getdone := 0
 		for {
-			<- GetDoneChan
+			<-GetDoneChan
 			getdone++
 			logs.Info("wait GetDoneChan random=%t getdone=%d / rounds=%d", randomize, getdone, rounds)
 			if getdone == rounds {
@@ -284,22 +284,22 @@ func main() {
 
 		// check all testmaps
 		for i, testmap := range capturemaps {
-			r := i+1
+			r := i + 1
 			go func(parChan chan struct{}, cliChan chan *client.Client, RetIntChan chan int, GetDoneChan chan struct{}, testmap map[string]string, r int) {
 				parChan <- struct{}{} // locks
 				var netCli *client.Client
 				select {
-					case netCli = <- cliChan:
-						logs.Info("check test: got open netCli")
-						// pass
-					default:
-						// no conn in cliChan? establish new!
-						newnetCli, err := cliHandler.NewCli(clientOpts)
-						if newnetCli == nil || err != nil {
-							logs.Error("ERROR netCli='%v' err='%v'", newnetCli, err)
-							return
-						}
-						netCli = newnetCli
+				case netCli = <-cliChan:
+					logs.Info("check test: got open netCli")
+					// pass
+				default:
+					// no conn in cliChan? establish new!
+					newnetCli, err := cliHandler.NewCli(clientOpts)
+					if newnetCli == nil || err != nil {
+						logs.Error("ERROR netCli='%v' err='%v'", newnetCli, err)
+						return
+					}
+					netCli = newnetCli
 				}
 				var checked int
 				var err error
@@ -307,13 +307,13 @@ func main() {
 					var val, nfk string
 					var found bool
 					switch netCli.Mode {
-						case 1:
-							// http mode
-							err = netCli.HTTP_Get(k, &val, &found) // http Get Key: return val is passed as pointer!
-						case 2:
-							// sock mode
-							// TODO! add test for GetMany
-							err = netCli.SOCK_Get(k, &val, &nfk, &found) // socket Get key: return val is passed as pointer!
+					case 1:
+						// http mode
+						err = netCli.HTTP_Get(k, &val, &found) // http Get Key: return val is passed as pointer!
+					case 2:
+						// sock mode
+						// TODO! add test for GetMany
+						err = netCli.SOCK_Get(k, &val, &nfk, &found) // socket Get key: return val is passed as pointer!
 					}
 					if err != nil {
 						log.Fatalf("ERROR randomize ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", k, err, netCli.Mode, nfk, found)
@@ -324,9 +324,9 @@ func main() {
 					}
 					checked++
 				} // end for testmap
-				cliChan <- netCli // return netCli to other rounds
+				cliChan <- netCli     // return netCli to other rounds
 				RetIntChan <- checked // returns checked amount to sum later
-				GetDoneChan <-struct{}{}
+				GetDoneChan <- struct{}{}
 				<-parChan // returns lock
 				logs.Info("<- check test random r=%d returned parChan", r)
 			}(parChan, cliChan, RetIntChan, GetDoneChan, testmap, r)
@@ -336,7 +336,7 @@ func main() {
 		logs.Info("wait for GetDoneChan random")
 		getdone := 0
 		for {
-			<- GetDoneChan
+			<-GetDoneChan
 			getdone++
 			logs.Info("wait GetDoneChan random=%t getdone=%d / rounds=%d", randomize, getdone, rounds)
 			if getdone == rounds {
@@ -363,21 +363,21 @@ final:
 		}
 	}
 	test_end := time.Now().Unix()
-	diff1 := insert_end-start
-	diff2 := test_end-start
+	diff1 := insert_end - start
+	diff2 := test_end - start
 	if diff1 <= 0 || diff2 <= 0 {
 		logs.Info("Check done!\n but calculating a benchmark value would result in division by zero error ....\n   just because it was tooo fast!\n    if you have not seen any other error:\n     everything went smoothly!")
 	} else {
-	logs.Info("Check done! Test Result:\n{\n parallel: %d\n total: %d\n checked: %d\n items/round: %d\n rounds: %d\n insert: %d sec (%d/sec)\n check: %d sec (%d/sec)\n total: %d sec\n}",
-											parallel,
-											items*rounds,
-											checked,
-											items,
-											rounds,
-											insert_end-start,
-											int64(checked)/(insert_end-start),
-											test_end-insert_end, int64(checked)/(test_end-insert_end),
-											test_end-start)
+		logs.Info("Check done! Test Result:\n{\n parallel: %d\n total: %d\n checked: %d\n items/round: %d\n rounds: %d\n insert: %d sec (%d/sec)\n check: %d sec (%d/sec)\n total: %d sec\n}",
+			parallel,
+			items*rounds,
+			checked,
+			items,
+			rounds,
+			insert_end-start,
+			int64(checked)/(insert_end-start),
+			test_end-insert_end, int64(checked)/(test_end-insert_end),
+			test_end-start)
 	}
 	logs.Info("infinite wait on stop_chan")
 	<-stop_chan

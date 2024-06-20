@@ -65,9 +65,8 @@ func (server *HttpServer) Start() {
 		Addr:         fmt.Sprintf("%s:%s", server.cfg.GetString(VK_SERVER_HOST), server.cfg.GetString(VK_SERVER_PORT_TCP)),
 		Handler:      server.ndbServer.CreateMux(),
 	}
-
+	server.wg.Add(1)
 	go func() {
-		server.wg.Add(1)
 		defer server.wg.Done()
 		server.logs.Info("HTTP @ '%s:%s'", server.cfg.GetString(VK_SERVER_HOST), server.cfg.GetString(VK_SERVER_PORT_TCP))
 		if err := server.httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
@@ -102,9 +101,8 @@ func (server *HttpsServer) Start() {
 		Addr:         fmt.Sprintf("%s:%s", server.cfg.GetString(VK_SERVER_HOST), server.cfg.GetString(VK_SERVER_PORT_TCP)),
 		Handler:      server.ndbServer.CreateMux(),
 	}
-
+	server.wg.Add(1)
 	go func() {
-		server.wg.Add(1)
 		defer server.wg.Done()
 		server.logs.Info("HTTPS @ '%s:%s'", server.cfg.GetString(VK_SERVER_HOST), server.cfg.GetString(VK_SERVER_PORT_TCP))
 		//server.logs.Debug("HttpsServer: PUB_CERT='%s' PRIV_KEY='%s'", server.cfg.GetString(VK_SEC_TLS_PUBCERT), server.cfg.GetString(VK_SEC_TLS_PRIVKEY))

@@ -13,10 +13,9 @@ import (
 	"time"
 )
 
-
 var (
 	wg              sync.WaitGroup
-	stop_chan = make(chan struct{}, 1)
+	stop_chan       = make(chan struct{}, 1)
 	Prof            *prof.Profiler
 	flag_configfile string
 	flag_logfile    string
@@ -47,19 +46,20 @@ func main() {
 	logs := ilog.NewLogger(loglevel, flag_logfile)
 
 	switch flag_sysmode {
-		case database.MAPMODE:
-			database.SYSMODE = database.MAPMODE
-		case database.SLIMODE:
-			database.SYSMODE = database.SLIMODE
-		default:
-			logs.Fatal("invalid sysmode")
+	case database.MAPMODE:
+		database.SYSMODE = database.MAPMODE
+	case database.SLIMODE:
+		database.SYSMODE = database.SLIMODE
+	default:
+		logs.Fatal("invalid sysmode")
 	}
 
 	cfg, sub_dicks := server.NewViperConf(flag_configfile, logs)
-
-
+	dbs := database.NewDBS(logs)
 	db := database.NewDICK(logs, sub_dicks, flag_hashmode)
+	dbs.AddDB("0", db)
 	srv := server.NewFactory().NewNDBServer(cfg, server.NewXNDBServer(db, logs), logs, stop_chan, wg, db)
+
 	if flag_pprofweb != "" || flag_profcpu {
 		Prof = prof.NewProf()
 		server.Prof = Prof

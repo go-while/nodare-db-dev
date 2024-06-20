@@ -7,8 +7,8 @@ import (
 	"github.com/go-while/nodare-db-dev/database"
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/go-while/nodare-db-dev/utils"
-	"log"
 	"io"
+	"log"
 	"net"
 	"net/textproto"
 	"os"
@@ -33,13 +33,12 @@ type SOCKET struct {
 	tlslistener    net.Listener
 	acl            *AccessControlList
 	id             uint64
-
 }
 
 type CLI struct {
-	id             uint64
-	conn           net.Conn
-	tp             *textproto.Conn
+	id   uint64
+	conn net.Conn
+	tp   *textproto.Conn
 } // end CLI struct
 
 var (
@@ -49,7 +48,7 @@ var (
 func NewSocketHandler(cfg VConfig, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup, db *database.XDatabase) *SOCKET {
 	sockets := &SOCKET{
 		logs: logs,
-		db: db,
+		db:   db,
 	}
 	logs.Debug("NewSocketHandler cfg='%#v'", cfg)
 	sockets.stop_chan = stop_chan
@@ -122,7 +121,7 @@ func (sock *SOCKET) Start(tcpListen string, tlsListen string, socketPath string,
 			sock.mux.Unlock()
 			cli := &CLI{
 				conn: conn,
-				id: sock.id,
+				id:   sock.id,
 			}
 			go sock.handleSocketConn(cli, "", true)
 		}
@@ -164,7 +163,7 @@ func (sock *SOCKET) Start(tcpListen string, tlsListen string, socketPath string,
 			sock.mux.Unlock()
 			cli := &CLI{
 				conn: conn,
-				id: sock.id,
+				id:   sock.id,
 			}
 			go sock.handleSocketConn(cli, raddr, false)
 		}
@@ -215,7 +214,7 @@ func (sock *SOCKET) Start(tcpListen string, tlsListen string, socketPath string,
 			sock.mux.Unlock()
 			cli := &CLI{
 				conn: conn,
-				id: sock.id,
+				id:   sock.id,
 			}
 			go sock.handleSocketConn(cli, raddr, false)
 		}
@@ -258,7 +257,7 @@ readlines:
 			sock.logs.Info("Error [cli=%d] handleConn err='%v'", cli.id, err)
 			break readlines
 		}
-		recvbytes += len(line)+2 // does not account line endings delimiter "\r\n" ! +2 does!
+		recvbytes += len(line) + 2 // does not account line endings delimiter "\r\n" ! +2 does!
 
 		// clients sends: CMD|num_of_lines\r\n
 		// followed by multiple lines with BEL byte \x07 as delim of k:v pairs
@@ -318,7 +317,6 @@ readlines:
 		//		OneKeyMoarPlease\r\n
 		//		\x17\r\n
 
-
 		switch mode {
 		case modeADD:
 			sock.logs.Debug("SOCKET [cli=%d] modeADD line='%#v'", cli.id, line)
@@ -351,7 +349,7 @@ readlines:
 				}
 				// got a k,v pair!
 				//v = line
-				numBy-- // decrease counter
+				numBy--  // decrease counter
 				tmpset++ // increase tmp counter, amount we have to set
 
 				keys = append(keys, key)
@@ -373,7 +371,7 @@ readlines:
 					sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got ETB", cli.id)
 					// client finished streaming
 					// set key:val pairs
-					setloopkeys:
+				setloopkeys:
 					for _, akey := range keys {
 						val := vals[akey] // contains ptr to strings as val
 						sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB PRE-Set akey='%s' v='%s'", cli.id, akey, *val)
@@ -432,7 +430,7 @@ readlines:
 					cli.tp.PrintfLine(EOM)
 					break readlines
 				}
-				numBy-- // decrease counter
+				numBy--  // decrease counter
 				tmpget++ // increase tmp counter, amount we have to get
 				keys = append(keys, line)
 				state++ // modeGET state is 1 now
@@ -446,7 +444,7 @@ readlines:
 				switch line {
 				case ETB:
 					lenk := len(keys)
-					getloopkeys:
+				getloopkeys:
 					for _, akey := range keys {
 						var val string
 						found := sock.db.Get(akey, &val)
@@ -455,7 +453,7 @@ readlines:
 							// reply error
 							retstr := NUL
 							if lenk > 1 {
-								retstr = retstr+key
+								retstr = retstr + key
 							}
 							n, ioerr := io.WriteString(cli.conn, retstr+CRLF)
 							if ioerr != nil {
@@ -500,7 +498,7 @@ readlines:
 					cli.tp.PrintfLine(EOM)
 					break readlines
 				}
-				numBy-- // decrease counter
+				numBy--  // decrease counter
 				tmpdel++ // increase tmp counter, amount we have to del
 				keys = append(keys, line)
 				state++ // modeDEL state is 1 now
@@ -513,7 +511,7 @@ readlines:
 				}
 				switch line {
 				case ETB:
-					delloopkeys:
+				delloopkeys:
 					for _, akey := range keys {
 						ok := sock.db.Del(akey)
 						if !ok {
@@ -609,7 +607,7 @@ readlines:
 				cli.tp.PrintfLine("200 StartMemProfile run=%d wait=%d", runi, waiti)
 
 			case Magic2:
-				 // CAPTURE CPU PROFILE
+				// CAPTURE CPU PROFILE
 				if !socket {
 					break readlines
 				}
@@ -662,15 +660,15 @@ func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *
 	for i, c := range line[2:] { // reads 3rd byte up to '|' to find num
 		if doRead_oflag && read_oflag && *num > 0 {
 			switch string(c) {
-				case ACK:
-					*overwrite = true
-					break
-				case NAK:
-					*overwrite = false
-					break
-				default:
-					sock.logs.Error("parseCMDline read oflag failed line='%#v' c='%#v' i=%d", line, c, i)
-					return false
+			case ACK:
+				*overwrite = true
+				break
+			case NAK:
+				*overwrite = false
+				break
+			default:
+				sock.logs.Error("parseCMDline read oflag failed line='%#v' c='%#v' i=%d", line, c, i)
+				return false
 			}
 		}
 		if i > 9 { // max 10 digits of num
@@ -696,17 +694,17 @@ func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *
 	}
 
 	switch *cmd {
-		case MagicS:
-			*mode = modeSET
-			*state++ // should be 0 now
-		case MagicG:
-			*mode = modeGET
-			*state++ // should be 0 now
-		case MagicD:
-			*mode = modeDEL
-			*state++ // should be 0 now
-		default:
-			*state-- // reduce state to parse other admin/debug commands
+	case MagicS:
+		*mode = modeSET
+		*state++ // should be 0 now
+	case MagicG:
+		*mode = modeGET
+		*state++ // should be 0 now
+	case MagicD:
+		*mode = modeDEL
+		*state++ // should be 0 now
+	default:
+		*state-- // reduce state to parse other admin/debug commands
 	}
 
 	sock.logs.Debug("parseCMDline returned cmd='%s' num=%d overwrite=%t doRead_oflag=%t", *cmd, *num, *overwrite, doRead_oflag)
