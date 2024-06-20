@@ -2,7 +2,7 @@ module github.com/go-while/nodare-db-dev/client
 
 go 1.22.4
 
-require github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240620174513-c175efdea0d2
+require github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240620234625-e6956247f464
 
 require (
 	github.com/cespare/xxhash v1.1.0 // indirect
