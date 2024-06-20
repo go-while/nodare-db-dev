@@ -29,7 +29,7 @@ if [[ "$1" = "del" || "$1" = "all" ]]; then
 ## looping DEL
 i=1;
 while [ $i -le $limit ]; do
- echo "del $i: `curl -s -X DELETE "http://localhost:2420/delete/myKey${i}"`"
+ echo "del $i: `curl -s -X GET "http://localhost:2420/del/myKey${i}"`"
  let i="i+1"
 done;
 fi
@@ -69,10 +69,10 @@ echo -e "get 3: `curl -sX GET "http://localhost:2420/get/myKey3"`"
 echo -e "get 4: `curl -sX GET "http://localhost:2420/get/myKey4"`"
 
 echo -e "\ndel 1-4"
-echo -e "del 1: `curl -sX DELETE "http://localhost:2420/delete/myKey1"`"
-echo -e "del 2: `curl -sX DELETE "http://localhost:2420/delete/myKey2"`"
-echo -e "del 3: `curl -sX DELETE "http://localhost:2420/delete/myKey3"`"
-echo -e "del 4: `curl -sX DELETE "http://localhost:2420/delete/myKey4"`"
+echo -e "del 1: `curl -sX GET "http://localhost:2420/del/myKey1"`"
+echo -e "del 2: `curl -sX GET "http://localhost:2420/del/myKey2"`"
+echo -e "del 3: `curl -sX GET "http://localhost:2420/del/myKey3"`"
+echo -e "del 4: `curl -sX GET "http://localhost:2420/del/myKey4"`"
 
 echo -e "\nget 1-4"
 echo -e "get 1: `curl -sX GET "http://localhost:2420/get/myKey1"`"

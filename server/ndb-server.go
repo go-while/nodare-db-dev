@@ -119,8 +119,10 @@ func (srv *XNDBServer) HandlerSet(w http.ResponseWriter, r *http.Request) {
 } // end func HandlerSet
 
 func (srv *XNDBServer) HandlerDel(w http.ResponseWriter, r *http.Request) {
+	srv.logs.Warn("HandlerDel")
 	nilheader(w)
 	if r.Method != http.MethodGet {
+		srv.logs.Warn("HandlerDel r.Method != http.MethodGet")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -131,6 +133,8 @@ func (srv *XNDBServer) HandlerDel(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotAcceptable) // 406
 		return
 	}
+
+	srv.logs.Debug("HandlerDel key='%s'", key)
 
 	ok := srv.db.Del(key)
 	if !ok {

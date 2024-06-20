@@ -4,16 +4,22 @@ import (
 	//"hash/fnv"
 	//"os"
 	"log"
+	"sync"
 )
 
 type DickEntry struct {
+	emux  sync.RWMutex
+	load  int64
 	next  *DickEntry
+	prev  *DickEntry
 	key   string
 	value string
 }
 
 type DickTable struct {
-	//tableSLI   []*DickEntry
+	load       int64
+	tmux       sync.RWMutex
+	tableSLI   []*DickEntry
 	tableMAP   map[string]string
 	size       int64
 	used       int64
@@ -26,7 +32,9 @@ func NewDickTable(size int64) (dt *DickTable) {
 		case MAPMODE:
 			dt.tableMAP = make(map[string]string, size)
 		case SLIMODE:
-			log.Fatal("not implemented")
+			dt.tableSLI = make([]*DickEntry, size)
+			dt.sizemask = uint64(size - 1)
+			//log.Printf("INFO NewDickTable SLIMODE not yet implemented")
 	}
 	dt.size = size
 	log.Printf("NewDickTable size=%d sizemask=%d", dt.size, dt.sizemask)
