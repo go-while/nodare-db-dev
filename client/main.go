@@ -39,7 +39,7 @@ var (
 
 func main() {
 	stop_chan := make(chan struct{}, 1)
-	flag.BoolVar(&daemon, "daemon", false, "launch workers in background")
+	//flag.BoolVar(&daemon, "daemon", false, "launch workers in background") // TODO
 	flag.StringVar(&addr, "addr", "", "uri to non-default http(s) (addr:port)")
 	flag.StringVar(&sock, "sock", "", "uri to non-default socket (addr:port)")
 	flag.IntVar(&mode, "mode", 2, "mode=1=http(s) | mode=2=socket")
