@@ -9,7 +9,9 @@ import (
 type XDBS struct {
 	mux  sync.RWMutex
 	dbs  map[string]*XDatabase
-	logs ilog.ILOG
+	Logs ilog.ILOG
+	HashMode int
+	SubDicks int
 }
 
 type XDatabase struct {
@@ -18,35 +20,57 @@ type XDatabase struct {
 	HashMode int
 }
 
-func NewDBS(logs ilog.ILOG) *XDBS {
+func NewDBS(logs ilog.ILOG, sub_dicks int, hashmode int) *XDBS {
 	xdb := &XDBS{
 		dbs:  make(map[string]*XDatabase, 16),
-		logs: logs,
+		Logs: logs,
+		HashMode: hashmode,
+		SubDicks: sub_dicks,
 	}
 	return xdb
 } // end func NewDBS
 
+
 func (x *XDBS) AddDB(ident string, db *XDatabase) bool {
-	x.mux.Lock()
-	defer x.mux.Unlock()
+	//x.mux.Lock()
+	//defer x.mux.Unlock()
 	if x.dbs[ident] != nil {
-		x.logs.Error("AddDB ident not unique!")
+		x.Logs.Error("AddDB ident not unique!")
 		return false
 	}
 	x.dbs[ident] = db
 	return true
 } // end func AddDB
 
-func (x *XDBS) GetDB(ident string) (db *XDatabase) {
+func (x *XDBS) GetDB(ident string, new bool) (db *XDatabase) {
 	x.mux.RLock()
-	defer x.mux.RUnlock()
 	if x.dbs[ident] != nil {
-		x.logs.Error("GetDB ident='%s' not found!", ident)
-		return nil
+		db = x.dbs[ident]
+		x.mux.RUnlock()
+		//x.Logs.Debug("GetDB ident='%s' => db", ident)
+		return
 	}
-	db = x.dbs[ident]
+	x.mux.RUnlock()
+
+	if !new {
+		x.Logs.Error("GetDB ident='%s' not found!", ident)
+		return
+	}
+
+	x.mux.Lock()
+	if x.dbs[ident] != nil {
+		// anyone was faster creating the db
+		db = x.dbs[ident]
+		x.mux.Unlock()
+		return
+	}
+
+	x.Logs.Error("GetDB ident='%s' => NewDICK", ident)
+	db = NewDICK(x.Logs, x.SubDicks, x.HashMode)
+	x.AddDB(ident, db)
+	x.mux.Unlock()
 	return
-} // end func AddDB
+} // end func GetDB
 
 func NewDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDatabase {
 

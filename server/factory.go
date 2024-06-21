@@ -15,7 +15,7 @@ func NewFactory() *Factory {
 	return &Factory{}
 }
 
-func (f *Factory) NewNDBServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup, db *database.XDatabase) (srv Server) {
+func (f *Factory) NewNDBServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup, dbs *database.XDBS) (srv Server) {
 	f.mux.Lock()
 	defer f.mux.Unlock()
 
@@ -24,7 +24,7 @@ func (f *Factory) NewNDBServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, st
 	logs.LogStart(logfile)
 	logs.Info("factory: viper cfg loaded tls_enabled=%t logfile='%s'", tls_enabled, logfile)
 
-	NewSocketHandler(cfg, logs, stop_chan, wg, db)
+	NewSocketHandler(cfg, logs, stop_chan, wg, dbs)
 	time.Sleep(time.Second / 10)
 
 	switch tls_enabled {

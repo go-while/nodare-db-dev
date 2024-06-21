@@ -240,8 +240,8 @@ func (d *XDICK) SetEntry(idi int64, ind int64, key string, value string, overwri
 			d.SubDICKsSLI[idi].dickTable.tableSLI[ind] = &DickEntry{key: key, value: value}
 			d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
 			added = true
-			d.usedInc(idi)
-			d.logs.Debug("SetEntry [%d:%d] NEW key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, key, exists, overwrite, added, d.SubDICKsSLI[idi].dickTable.used)
+			used := d.usedInc(idi)
+			d.logs.Debug("SetEntry [%d:%d] NEW key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, key, exists, overwrite, added, used)
 			return
 		}
 		d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
@@ -265,7 +265,7 @@ func (d *XDICK) SetEntry(idi int64, ind int64, key string, value string, overwri
 		// got match
 		if !overwrite {
 			exists = true
-			d.logs.Debug("SetEntry [%d:%d] RET load=%d key='%s' exists=%t overwrite=%t added=%t", idi, ind, load, key, exists, overwrite, added)
+			//d.logs.Debug("SetEntry [%d:%d] RET load=%d key='%s' exists=%t overwrite=%t added=%t", idi, ind, load, key, exists, overwrite, added)
 			return
 		}
 		entry.emux.Lock()
@@ -273,7 +273,7 @@ func (d *XDICK) SetEntry(idi int64, ind int64, key string, value string, overwri
 		entry.value = value
 		entry.emux.Unlock()
 		added = true
-		d.logs.Debug("SetEntry [%d:%d] SET load=%d key='%s' value='%s' exists=%t overwrite=%t added=%t", idi, ind, load, key, value, exists, overwrite, added)
+		//d.logs.Debug("SetEntry [%d:%d] SET load=%d key='%s' value='%s' exists=%t overwrite=%t added=%t", idi, ind, load, key, value, exists, overwrite, added)
 		return
 	} // end for
 
@@ -283,13 +283,13 @@ func (d *XDICK) SetEntry(idi int64, ind int64, key string, value string, overwri
 		prev.next = &DickEntry{key: key, value: value, prev: prev}
 		d.setEntryLoad(idi, ind, load)
 		added = true
-		d.usedInc(idi)
-		d.logs.Debug("SetEntry [%d:%d] ADD load=%d key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, load, key, exists, overwrite, added, d.SubDICKsSLI[idi].dickTable.used)
+		used := d.usedInc(idi)
+		d.logs.Debug("SetEntry [%d:%d] ADD load=%d key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, load, key, exists, overwrite, added, used)
 		return
 	}
 
 	// should never reach here
-	d.logs.Fatal("SetEntry [%d:%d] ERR load=%d key='%s' exists=%t overwrite=%t added=%t used=%d prev=nil?!", idi, ind, load, key, exists, overwrite, added, d.SubDICKsSLI[idi].dickTable.used)
+	d.logs.Fatal("SetEntry [%d:%d] ERR load=%d key='%s' exists=%t overwrite=%t added=%t used=%d prev=nil?!", idi, ind, load, key, exists, overwrite, added, d.getUsed(idi))
 	return
 } // end func SetEntry
 
@@ -492,12 +492,24 @@ func (d *XDICK) getEntryLoad(idi int64, ind int64) (load int64) {
 	return
 } // end func setLoad of table
 
-func (d *XDICK) usedInc(idi int64) {
+func (d *XDICK) getUsed(idi int64) (used int64) {
+	d.SubDICKsSLI[idi].dickTable.tmux.RLock()
+	used = d.SubDICKsSLI[idi].dickTable.used
+	d.SubDICKsSLI[idi].dickTable.tmux.RUnlock()
+	return
+}
+func (d *XDICK) usedInc(idi int64) (used int64) {
+	d.SubDICKsSLI[idi].dickTable.tmux.Lock()
 	d.SubDICKsSLI[idi].dickTable.used++
+	used = d.SubDICKsSLI[idi].dickTable.used
+	d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
+	return
 } // end func usedIncrease
 
-func (d *XDICK) usedDec(idi int64) {
+func (d *XDICK) usedDec(idi int64) (used int64) {
 	d.SubDICKsSLI[idi].dickTable.used--
+	used = d.SubDICKsSLI[idi].dickTable.used
+	return
 } // end func usedDecrease
 
 // GenerateSALT generates a fixed slice of 16 maybe NOT really random bytes

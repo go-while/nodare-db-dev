@@ -9,6 +9,8 @@ import (
 )
 
 const KEY_PARAM = "key"
+const DB_PARAM = "db"
+const DEFAULT_DB = "0"
 
 type WebMux interface {
 	CreateMux() *mux.Router
@@ -18,13 +20,13 @@ type WebMux interface {
 }
 
 type XNDBServer struct {
-	db   *database.XDatabase
+	dbs  *database.XDBS
 	logs ilog.ILOG
 }
 
-func NewXNDBServer(db *database.XDatabase, logs ilog.ILOG) *XNDBServer {
+func NewXNDBServer(dbs *database.XDBS, logs ilog.ILOG) *XNDBServer {
 	return &XNDBServer{
-		db:   db,
+		dbs:   dbs,
 		logs: logs,
 	}
 }
@@ -35,8 +37,11 @@ func (srv *XNDBServer) CreateMux() *mux.Router {
 	//r.HandleFunc("/jnv/{"+KEY_PARAM+"}", srv.HandlerGetJsonValByKey)
 	//r.HandleFunc("/zip/{"+KEY_PARAM+"}", srv.HandlerCompress)
 	r.HandleFunc("/get/{"+KEY_PARAM+"}", srv.HandlerGetValByKey)
+	r.HandleFunc("/get/{"+KEY_PARAM+"}/{"+DB_PARAM+"}", srv.HandlerGetValByKey)
 	r.HandleFunc("/del/{"+KEY_PARAM+"}", srv.HandlerDel)
+	r.HandleFunc("/del/{"+KEY_PARAM+"}/{"+DB_PARAM+"}", srv.HandlerDel)
 	r.HandleFunc("/set", srv.HandlerSet)
+	r.HandleFunc("/set/{"+DB_PARAM+"}", srv.HandlerSet)
 	return r
 }
 
@@ -51,13 +56,24 @@ func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request
 
 	vars := mux.Vars(r)
 	key := vars[KEY_PARAM]
-
 	if key == "" {
 		w.WriteHeader(http.StatusNotAcceptable) // 406
 		return
 	}
+
+	xdb := DEFAULT_DB
+	if vars["db"] != "" {
+		xdb = vars["db"]
+	}
+	db := srv.dbs.GetDB(xdb, false)
+	if db == nil {
+		srv.logs.Info("HandlerGetValByKey DB ident='%s' not found. key='%s'", xdb, key)
+		w.WriteHeader(http.StatusGone) // 410
+		return
+	}
+
 	var val string
-	found := srv.db.Get(key, &val)
+	found := db.Get(key, &val)
 	if !found {
 		srv.logs.Info("HandlerGetValByKey not found key='%s'", key)
 		w.WriteHeader(http.StatusGone) // 410
@@ -99,6 +115,18 @@ func (srv *XNDBServer) HandlerSet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+
+	vars := mux.Vars(r)
+	ident := DEFAULT_DB
+	if vars["db"] != "" {
+		ident = vars["db"]
+	}
+	db := srv.dbs.GetDB(ident, true)
+	if db == nil {
+		w.WriteHeader(http.StatusForbidden) // 403
+		return
+	}
+
 	// FIXME DECODE JSON
 	var data map[string]string
 	err := json.NewDecoder(r.Body).Decode(&data)
@@ -108,7 +136,7 @@ func (srv *XNDBServer) HandlerSet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, value := range data {
-		ok := srv.db.Set(key, value, true) // default always overwrites
+		ok := db.Set(key, value, true) // default always overwrites
 		if !ok {
 			srv.logs.Warn("HandlerSet err='%v'", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -133,10 +161,20 @@ func (srv *XNDBServer) HandlerDel(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotAcceptable) // 406
 		return
 	}
-
 	srv.logs.Debug("HandlerDel key='%s'", key)
 
-	ok := srv.db.Del(key)
+	ident := DEFAULT_DB
+	if vars["db"] != "" {
+		ident = vars["db"]
+	}
+	db := srv.dbs.GetDB(ident, false)
+	if db == nil {
+		srv.logs.Info("HandlerDel DB ident='%s' not found. key='%s'", ident, key)
+		w.WriteHeader(http.StatusGone) // 410
+		return
+	}
+
+	ok := db.Del(key)
 	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

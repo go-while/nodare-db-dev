@@ -55,10 +55,10 @@ func main() {
 	}
 
 	cfg, sub_dicks := server.NewViperConf(flag_configfile, logs)
-	dbs := database.NewDBS(logs)
+	dbs := database.NewDBS(logs, sub_dicks, flag_hashmode)
 	db := database.NewDICK(logs, sub_dicks, flag_hashmode)
 	dbs.AddDB("0", db)
-	srv := server.NewFactory().NewNDBServer(cfg, server.NewXNDBServer(db, logs), logs, stop_chan, wg, db)
+	srv := server.NewFactory().NewNDBServer(cfg, server.NewXNDBServer(dbs, logs), logs, stop_chan, wg, dbs)
 
 	if flag_pprofweb != "" || flag_profcpu {
 		Prof = prof.NewProf()

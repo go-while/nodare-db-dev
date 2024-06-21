@@ -19,7 +19,7 @@ import (
 
 type SOCKET struct {
 	stop_chan      chan struct{}
-	db             *database.XDatabase
+	dbs            *database.XDBS
 	wg             sync.WaitGroup
 	mux            sync.Mutex
 	cpu            sync.Mutex
@@ -45,10 +45,10 @@ var (
 	DefaultACL map[string]bool // can be set before booting
 )
 
-func NewSocketHandler(cfg VConfig, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup, db *database.XDatabase) *SOCKET {
+func NewSocketHandler(cfg VConfig, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup, dbs *database.XDBS) *SOCKET {
 	sockets := &SOCKET{
 		logs: logs,
-		db:   db,
+		dbs:   dbs,
 	}
 	logs.Debug("NewSocketHandler cfg='%#v'", cfg)
 	sockets.stop_chan = stop_chan
@@ -83,7 +83,7 @@ func (sock *SOCKET) CloseSocket() {
 	stopnotify := <-sock.stop_chan // waits for signal from main
 	sock.socketlistener.Close()
 	os.Remove(sock.socketPath)
-	sock.logs.Debug("Socket closed")
+	//sock.logs.Debug("Socket closed")
 	sock.stop_chan <- stopnotify // push back in to notify others
 }
 
@@ -248,6 +248,7 @@ func (sock *SOCKET) handleSocketConn(cli *CLI, raddr string, socket bool) {
 	var sentbytes int
 	var recvbytes int
 	var overwrite bool
+	var db *database.XDatabase
 	//var split [3]string
 
 readlines:
@@ -268,7 +269,7 @@ readlines:
 		//
 		// server replies on order of sending
 
-		// 	ADD|3\r\n
+		// 	ADD|3|$DB\r\n
 		// 		AveryLooongKey1111111NameforThisLIST\r\n
 		//		aValue01forThisList\r\n
 		//		aValue02forThisList\r\n
@@ -279,12 +280,12 @@ readlines:
 		// overwrite true = const Acknowledge "ACK" or \x05
 		// overwrite false = const Negative Ack "NAK" or \x15
 
-		// 	SET|1|$OF\r\n
+		// 	SET|1|$OF|$DB\r\n
 		//		AveryLooongKey11\r\n
 		//		AveryLongValue\r\n
 		//		\x17\r\n
 
-		// 	SET|3|$OF\r\n
+		// 	SET|3|$OF|$DB\r\n
 		// 		AveryLooongKey11\r\n
 		// 		AveryLongValue\r\n
 		// 		\x07\r\n
@@ -295,21 +296,21 @@ readlines:
 		// 		AveryLonoooooongValue\r\n
 		// 		\x17\r\n
 
-		//	GET|1\r\n
+		//	GET|1|$DB\r\n
 		// 		AveryLooongKey\r\n
 		//		\x17\r\n
 
-		//	GET|3\r\n
+		//	GET|3|$DB\r\n
 		// 		AveryLooongKey\r\n
 		// 		AnotherLooooooooongKey\r\n
 		//		NeedMOaaaarKeysKey\r\n
 		//		\x17\r\n
 
-		//	DEL|1\r\n
+		//	DEL|1|$DB\r\n
 		// 		AveryLooongKey\r\n
 		//		\x17\r\n
 
-		//	DEL|5\r\n
+		//	DEL|5|$DB\r\n
 		// 		AveryLooongKey\r\n
 		// 		AnotherLooooooooongKey\r\n
 		//		NeedMOaaaarKeysKey\r\n
@@ -319,11 +320,11 @@ readlines:
 
 		switch mode {
 		case modeADD:
-			sock.logs.Debug("SOCKET [cli=%d] modeADD line='%#v'", cli.id, line)
+			//sock.logs.Debug("SOCKET [cli=%d] modeADD line='%#v'", cli.id, line)
 			// TODO process multiple Add lines here.
 
 		case modeSET:
-			sock.logs.Debug("SOCKET [cli=%d] modeSET line='%#v'", cli.id, line)
+			//sock.logs.Debug("SOCKET [cli=%d] modeSET line='%#v'", cli.id, line)
 			// process multiple Set lines here.
 
 			// receive first line with key at state 0
@@ -355,7 +356,7 @@ readlines:
 				keys = append(keys, key)
 				vals[key] = &line
 
-				sock.logs.Debug("SOCKET [cli=%d] modeSET state1 recv k='%s' v='%s' keys=%d vals=%d", cli.id, key, line, len(keys), len(vals))
+				//sock.logs.Debug("SOCKET [cli=%d] modeSET state1 recv k='%s' v='%s' keys=%d vals=%d", cli.id, key, line, len(keys), len(vals))
 				key = ""
 				state++ // modeSET state is 2 now
 				continue readlines
@@ -368,16 +369,16 @@ readlines:
 
 				switch line {
 				case ETB:
-					sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got ETB", cli.id)
+					//sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got ETB", cli.id)
 					// client finished streaming
 					// set key:val pairs
 				setloopkeys:
 					for _, akey := range keys {
 						val := vals[akey] // contains ptr to strings as val
-						sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB PRE-Set akey='%s' v='%s'", cli.id, akey, *val)
-						ok := sock.db.Set(akey, *val, overwrite) // default always overwrites
+						//sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB PRE-Set akey='%s' v='%s'", cli.id, akey, *val)
+						ok := db.Set(akey, *val, overwrite) // default always overwrites
 						if !ok {
-							sock.logs.Error("SOCKET [cli=%d] modeSET state2 set !ok overwrite=%t", cli.id, overwrite)
+							//sock.logs.Debug("SOCKET [cli=%d] modeSET state2 set !ok overwrite=%t", cli.id, overwrite)
 							// reply error
 							n, ioerr := io.WriteString(cli.conn, NUL+CRLF)
 							if ioerr != nil {
@@ -390,12 +391,12 @@ readlines:
 						}
 						tmpset--
 						set++
-						sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
+						//sock.logs.Debug("SOCKET [cli=%d] modeSET state2 ETB Set k='%s' v='%s'", cli.id, akey, *val)
 					} // end for keys
 
 					if set == len(keys) {
 						// reply single ACK
-						sock.logs.Debug("SOCKET [cli=%d] state2 reply ACK", cli.id)
+						//sock.logs.Debug("SOCKET [cli=%d] state2 reply ACK", cli.id)
 						n, ioerr := io.WriteString(cli.conn, ACK+CRLF)
 						if ioerr != nil {
 							sock.logs.Error("SOCKET [cli=%d] modeSET state2 reply ioerr='%v'", cli.id, ioerr)
@@ -408,14 +409,14 @@ readlines:
 					continue readlines
 
 				case BEL:
-					sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got BEL", cli.id)
+					//sock.logs.Debug("SOCKET [cli=%d] modeSET state2 got BEL", cli.id)
 					// client continues sending k,v pairs
 					continue readlines
 				}
 			}
 
 		case modeGET:
-			sock.logs.Debug("SOCKET [cli=%d] modeGET line='%#v'", cli.id, line)
+			//sock.logs.Debug("SOCKET [cli=%d] modeGET line='%#v'", cli.id, line)
 			// process multiple Get lines here.
 
 			// receive first line with key at state 0
@@ -447,7 +448,7 @@ readlines:
 				getloopkeys:
 					for _, akey := range keys {
 						var val string
-						found := sock.db.Get(akey, &val)
+						found := db.Get(akey, &val)
 						if !found {
 							sock.logs.Error("SOCKET [cli=%d] modeGET state1 val nil", cli.id)
 							// reply error
@@ -473,7 +474,7 @@ readlines:
 						tmpget--
 						get++
 						sentbytes += n
-						sock.logs.Debug("SOCKET [cli=%d] modeGET state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val)
+						//sock.logs.Debug("SOCKET [cli=%d] modeGET state1 ETB Got k='%s' ?=> val='%s'", cli.id, akey, val)
 					} // end for keys
 					mode = no_mode
 					keys = nil
@@ -484,7 +485,7 @@ readlines:
 			} // end switch state
 
 		case modeDEL:
-			sock.logs.Debug("SOCKET [cli=%d] modeDEL line='%#v'", cli.id, line)
+			//sock.logs.Debug("SOCKET [cli=%d] modeDEL line='%#v'", cli.id, line)
 
 			// receive first line with key at state 0
 			// if client sends \x07 (BEL) flip state to 0 and continue reading key lines
@@ -513,7 +514,7 @@ readlines:
 				case ETB:
 				delloopkeys:
 					for _, akey := range keys {
-						ok := sock.db.Del(akey)
+						ok := db.Del(akey)
 						if !ok {
 							sock.logs.Error("SOCKET [cli=%d] modeDEL state1 !ok", cli.id)
 							// reply with error
@@ -535,7 +536,7 @@ readlines:
 						tmpdel--
 						del++
 						sentbytes += n
-						sock.logs.Debug("SOCKET [cli=%d] modeDEL state1 ETB k='%s'", cli.id, akey)
+						//sock.logs.Debug("SOCKET [cli=%d] modeDEL state1 ETB k='%s'", cli.id, akey)
 					} // end for keys
 				case BEL:
 					state-- // reset state to read more keys
@@ -551,15 +552,17 @@ readlines:
 			}
 			// 1st arg is command
 			// 2nd arg is number of keys client wants to set/get/del
-			// 3rt arg is $OV overwrite flag
+			// 3rd arg is $OV overwrite flag
+			// 4th arg is Database (default: 0)
 			// len min: X|1
 			state, numBy = -1, -1
 			//add, tmpadd = 0, 0
 			set, tmpset = 0, 0
 			del, tmpdel = 0, 0
 			get, tmpget = 0, 0
+			db = nil
 			// no mode is set: find command and set mode to accept reading of multiple lines
-			if !sock.parseCMDline(line, &cmd, &numBy, &overwrite, &state, &mode, &numBy) {
+			if !sock.parseCMDline(line, &cmd, &numBy, &overwrite, &state, &mode, &numBy, &db) {
 				cli.tp.PrintfLine(CAN)
 				break readlines
 			}
@@ -644,7 +647,7 @@ readlines:
 	sock.logs.Info("SOCKET [cli=%d] LEFT conn rx=%d tx=%d", cli.id, recvbytes, sentbytes)
 } // end func handleConn
 
-func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *bool, state *int, mode *int, numBy *int) bool {
+func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *bool, state *int, mode *int, numBy *int, db **database.XDatabase) bool {
 	var doRead_oflag, read_oflag bool
 	if len(line) < 3 || line[1] != '|' {
 		// invalid format
@@ -655,10 +658,11 @@ func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *
 	if *cmd == MagicS {
 		doRead_oflag = true
 	}
+	delim := 0
+	dbstr := ""
 	numby := ""
-
 	for i, c := range line[2:] { // reads 3rd byte up to '|' to find num
-		if doRead_oflag && read_oflag && *num > 0 {
+		if delim == 1 && doRead_oflag && read_oflag && *num > 0 {
 			switch string(c) {
 			case ACK:
 				*overwrite = true
@@ -670,21 +674,29 @@ func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *
 				sock.logs.Error("parseCMDline read oflag failed line='%#v' c='%#v' i=%d", line, c, i)
 				return false
 			}
-		}
-		if i > 9 { // max 10 digits of num
-			sock.logs.Error("parseCMDline num > 10 digits")
-			return false
-		}
-		if c == '|' {
-			sock.logs.Debug("parseCMDline hit 2nd delim i=%d c='%#v' doRead_oflag=%t cmd=%s", i, c, doRead_oflag, *cmd)
-			if !doRead_oflag {
-				break
-			}
-			read_oflag = true
 			continue
 		}
-		if utils.IsDigit(string(c)) {
+		if doRead_oflag && delim == 2 || !doRead_oflag && delim == 1 {
+			// read database
+			dbstr = dbstr + string(c)
+		}
+		if delim == 0 && utils.IsDigit(string(c)) {
 			numby = numby + string(c)
+			if i > 9 { // max 10 digits of num
+				sock.logs.Error("parseCMDline num > 10 digits")
+				return false
+			}
+		}
+		if c == '|' {
+			delim++
+			if delim == 1 {
+				////sock.logs.Debug("parseCMDline hit 2nd delim i=%d c='%#v' doRead_oflag=%t cmd=%s", i, c, doRead_oflag, *cmd)
+				if !doRead_oflag {
+					continue
+				}
+				read_oflag = true
+			}
+			continue
 		}
 	} // end for parse num
 	*num = utils.Str2int(numby)
@@ -692,6 +704,18 @@ func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *
 		sock.logs.Error("parseCMDline read num=0")
 		return false
 	}
+	if dbstr == "" {
+		dbstr = DEFAULT_DB
+		////sock.logs.Debug("parseCMDline cmd='%s' dbstr empty, use DEFAULT_DB='%s'", *cmd, dbstr)
+	} else {
+		////sock.logs.Debug("parseCMDline cmd='%s' dbstr='%s'", *cmd, dbstr)
+	}
+	adb := sock.dbs.GetDB(dbstr, true)
+	if adb == nil {
+		sock.logs.Fatal("parseCMDline cmd='%s' db ident='%s' nil", *cmd, dbstr)
+	}
+	////sock.logs.Debug("parseCMDline cmd='%s' db ident='%s' adb='%#v'", *cmd, dbstr, adb)
+	*db = adb
 
 	switch *cmd {
 	case MagicS:
@@ -707,7 +731,7 @@ func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *
 		*state-- // reduce state to parse other admin/debug commands
 	}
 
-	sock.logs.Debug("parseCMDline returned cmd='%s' num=%d overwrite=%t doRead_oflag=%t", *cmd, *num, *overwrite, doRead_oflag)
+	//sock.logs.Debug("parseCMDline returned cmd='%s' num=%d overwrite=%t doRead_oflag=%t", *cmd, *num, *overwrite, doRead_oflag)
 	return true
 } // end func parseCMDline
 
