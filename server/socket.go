@@ -712,7 +712,8 @@ func (sock *SOCKET) parseCMDline(line string, cmd *string, num *int, overwrite *
 	}
 	adb := sock.dbs.GetDB(dbstr, true)
 	if adb == nil {
-		sock.logs.Fatal("parseCMDline cmd='%s' db ident='%s' nil", *cmd, dbstr)
+		sock.logs.Error("parseCMDline cmd='%s' db ident='%s' nil", *cmd, dbstr)
+		return false
 	}
 	////sock.logs.Debug("parseCMDline cmd='%s' db ident='%s' adb='%#v'", *cmd, dbstr, adb)
 	*db = adb
