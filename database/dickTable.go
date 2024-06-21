@@ -19,11 +19,16 @@ type DickEntry struct {
 	value string
 }
 
+type MapEntry struct {
+	mmux  sync.RWMutex
+	value string
+}
+
 type DickTable struct {
 	load     int64
 	tmux     sync.RWMutex
 	tableSLI []*DickEntry
-	tableMAP map[string]string
+	tableMAP map[string]*MapEntry
 	size     int64
 	used     int64
 	sizemask uint64
@@ -33,7 +38,7 @@ func NewDickTable(size int64) (dt *DickTable) {
 	dt = &DickTable{}
 	switch SYSMODE {
 	case MAPMODE:
-		dt.tableMAP = make(map[string]string, size)
+		dt.tableMAP = make(map[string]*MapEntry, size)
 	case SLIMODE:
 		dt.tableSLI = make([]*DickEntry, size)
 		dt.sizemask = uint64(size - 1)

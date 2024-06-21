@@ -142,10 +142,10 @@ func (d *XDICK) keyIndex(key string, idx *string, idi *int64, ind *int64, hk *ui
 			*idx = fmt.Sprintf("%04x", pcashash.String(key), d.SubDepth)[:d.SubDepth]
 		case 2:
 			// use CRC32
-			generateCRC32AsString(key, d.SubDepth, idx) //[:d.SubDepth]
+			generateCRC32AsString(key, d.SubDepth, idx)
 		case 3:
 			// uses FNV1
-			generateFNV1aHash(key, d.SubDepth, idx) //[:d.SubDept
+			generateFNV1aHash(key, d.SubDepth, idx)
 		default:
 			d.logs.Fatal("Invalid HashMode")
 		}
@@ -207,7 +207,7 @@ func (d *XDICK) Set(key string, value string, overwrite bool) bool {
 				return false
 			}
 		}
-		d.SubDICKsMAP[idx].dickTable.tableMAP[key] = value
+		d.SubDICKsMAP[idx].dickTable.tableMAP[key] = &MapEntry{ value: value }
 		return true
 
 	case SLIMODE:
@@ -301,7 +301,7 @@ func (d *XDICK) Get(key string, val *string) (containsKey bool) {
 		d.logs.Debug("MAP GET getEntry key='%s' idx=%s", key, idx)
 		d.SubDICKsMAP[idx].submux.RLock()
 		if _, containsKey = d.SubDICKsMAP[idx].dickTable.tableMAP[key]; containsKey {
-			*val = d.SubDICKsMAP[idx].dickTable.tableMAP[key]
+			*val = d.SubDICKsMAP[idx].dickTable.tableMAP[key].value
 		}
 		d.SubDICKsMAP[idx].submux.RUnlock()
 	case SLIMODE:
