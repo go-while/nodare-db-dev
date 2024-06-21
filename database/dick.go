@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	INITIAL_SIZE = int64(1024 * 1024)
+	INITIAL_SIZE = int64(1024 * 1024) // multiplied by subdicks = unique keys
 	MAX_SIZE     = 1 << 63
 	MAPMODE      = 1
 	SLIMODE      = 2
@@ -31,7 +31,7 @@ const (
 var (
 	once           sync.Once
 	AVAIL_SUBDICKS = []int{16, 256, 4096, 65536, 10, 100, 1000, 10000}
-	AVAIL_HASHALGO = []int{HASH_siphash, HASH_FNV32A, HASH_FNV64A, HASH_XXHASH, HASH_PCAS}
+	//AVAIL_HASHALGO = []int{HASH_siphash, HASH_FNV32A, HASH_FNV64A, HASH_XXHASH, HASH_PCAS}
 	SYSMODE        int
 	HASHER         = HASH_XXHASH
 	key0, key1     uint64
