@@ -14,8 +14,6 @@ github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nos
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
 github.com/go-while/go-cpu-mem-profiler v0.0.0-20240612221627-856954a5fc83 h1:vehfiL7LsK8bJQZdVuJxcMem4AP2HwPEQ8orUUnIA+E=
 github.com/go-while/go-cpu-mem-profiler v0.0.0-20240612221627-856954a5fc83/go.mod h1:31AY7BccUb7qvKi4LQCwLOYsvcza9TdQtl/zHEIOcRE=
-github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240621020552-9d93787df3c5 h1:IvkWtu5KGhlDKDC8gTMDVImyU1bdAee2kcEC2UY9KmQ=
-github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240621020552-9d93787df3c5/go.mod h1:VQ2yOzT4sI0cHQ3DiTZgdy1q1Qza3yQRGICStamfC+E=
 github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240621021714-e18e93c75783 h1:qNYSOvK2Jjz+IdvADX3gzaUiP1ffPKHRqOnNy+pT/1o=
 github.com/go-while/nodare-db-dev v0.0.2-alpha-test.0.20240621021714-e18e93c75783/go.mod h1:NCJpc21PPPXVBIN07rSxdn54RB343pI1K72JS2/S6AA=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
