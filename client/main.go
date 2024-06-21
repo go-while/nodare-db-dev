@@ -34,6 +34,7 @@ var (
 	keylen    int
 	vallen    int
 	overwrite bool
+	db string
 )
 
 func main() {
@@ -53,6 +54,7 @@ func main() {
 	flag.IntVar(&vallen, "vallen", 16, "set length of val. used with -random=true")
 	flag.BoolVar(&overwrite, "overwrite", false, "allows Set to overwrite values. tests may fail with overwrite=true!\n because randomness with many go-routines is not really 100% random means not 100% unique keys!\n \n overwrite flag works only with sockets! http does not implement this flag yet.")
 	flag.StringVar(&logfile, "logfile", "", "logfile for client")
+	flag.StringVar(&db, "db", "0", "use any string as database ident")
 	flag.Parse()
 
 	logs := ilog.NewLogger(ilog.GetEnvLOGLEVEL(), logfile)
@@ -154,7 +156,7 @@ func main() {
 				case 2:
 					// sock mode
 					// TODO! add test for SetMany
-					err = netCli.SOCK_Set(key, val, &resp, overwrite, &exists)
+					err = netCli.SOCK_Set(key, val, &resp, overwrite, &exists, db)
 				}
 				if err != nil {
 					logs.Fatal("ERROR Set key='%s' => val='%s' err='%v' resp='%s' mode=%d", key, val, err, resp, mode)
@@ -235,7 +237,7 @@ func main() {
 					case 2:
 						// sock mode
 						// TODO! add test for GetMany
-						err = netCli.SOCK_Get(checkkey, &retval, &nfk, &found) // socket Get key: return val is passed as pointer!
+						err = netCli.SOCK_Get(checkkey, &retval, &nfk, &found, db) // socket Get key: return val is passed as pointer!
 					}
 					if err != nil {
 						log.Fatalf("ERROR ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", checkkey, err, netCli.Mode, nfk, found)
@@ -313,7 +315,7 @@ func main() {
 					case 2:
 						// sock mode
 						// TODO! add test for GetMany
-						err = netCli.SOCK_Get(k, &val, &nfk, &found) // socket Get key: return val is passed as pointer!
+						err = netCli.SOCK_Get(k, &val, &nfk, &found, db) // socket Get key: return val is passed as pointer!
 					}
 					if err != nil {
 						log.Fatalf("ERROR randomize ?_Get k='%s' err='%v' mode=%d nfk='%s' found=%t", k, err, netCli.Mode, nfk, found)

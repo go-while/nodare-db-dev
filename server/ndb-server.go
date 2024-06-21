@@ -8,10 +8,6 @@ import (
 	"net/http"
 )
 
-const KEY_PARAM = "key"
-const DB_PARAM = "db"
-const DEFAULT_DB = "0"
-
 type WebMux interface {
 	CreateMux() *mux.Router
 	HandlerGetValByKey(w http.ResponseWriter, r *http.Request)

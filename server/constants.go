@@ -28,6 +28,11 @@ const DEFAULT_SERVER_SOCKET_TLS_PORT = "4420"
 const DEFAULT_TLS_PRIVKEY = "privkey.pem"
 const DEFAULT_TLS_PUBCERT = "fullchain.pem"
 
+// WEB ROUTER DATABASE FLAGS
+const KEY_PARAM = "key"
+const DB_PARAM = "db"
+const DEFAULT_DB = "0"
+
 // readline flags
 const no_mode = 0x00
 const modeADD = 0x11

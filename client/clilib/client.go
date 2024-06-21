@@ -264,12 +264,14 @@ func (c *Client) Transport() {
 }
 
 
-func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool, exists *bool) (err error) {
+func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool, exists *bool, db string) (err error) {
 	if c.tp == nil {
 		err = fmt.Errorf("ERROR SOCK_Set c.tp nil")
 		return
 	}
-
+	if db == "" {
+		db = server.DEFAULT_DB
+	}
 	Oflag := server.NAK // false = not overwrite on Set
 	switch overwrite {
 		case true:
@@ -281,7 +283,7 @@ func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool, 
 	//		AveryLongValue\r\n
 	//		\x17\r\n
 
-	request := server.MagicS+"|1|"+Oflag+server.CRLF+key+server.CRLF+val+server.CRLF+server.ETB+server.CRLF
+	request := server.MagicS+"|1|"+Oflag+"|"+db+server.CRLF+key+server.CRLF+val+server.CRLF+server.ETB+server.CRLF
 	c.logs.Debug("SOCK_Set k='%v' v='%v' request='%#v' Oflag='%#v'", key, val, request, Oflag)
 	_, err = io.WriteString(c.sock, request)
 	if err != nil {
@@ -313,10 +315,13 @@ func (c *Client) SOCK_Set(key string, val string, resp *string, overwrite bool, 
 	return
 } // end func SOCK_Set
 
-func (c *Client) SOCK_Get(key string, resp *string, nfk *string, found *bool) (err error) {
+func (c *Client) SOCK_Get(key string, resp *string, nfk *string, found *bool, db string) (err error) {
 	if c.tp == nil {
 		err = fmt.Errorf("ERROR SOCK_Get c.tp nil")
 		return
+	}
+	if db == "" {
+		db = server.DEFAULT_DB
 	}
 	//c.logs.Debug("SOCK_Get key='%s'", key)
 
@@ -324,7 +329,7 @@ func (c *Client) SOCK_Get(key string, resp *string, nfk *string, found *bool) (e
 	// 		AveryLooongKey\r\n
 	//		\x17\r\n
 
-	request := server.MagicG+"|1"+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
+	request := server.MagicG+"|1|"+db+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
 	_, err = io.WriteString(c.sock, request)
 	if err != nil {
 		return
@@ -355,17 +360,19 @@ func (c *Client) SOCK_Get(key string, resp *string, nfk *string, found *bool) (e
 	return
 } // end func SOCK_Get
 
-func (c *Client) SOCK_Del(key string, resp *string, nfk *string) (err error) {
+func (c *Client) SOCK_Del(key string, resp *string, nfk *string, db string) (err error) {
 	if c.tp == nil {
 		err = fmt.Errorf("ERROR SOCK_Get c.tp nil")
 		return
 	}
-
+	if db == "" {
+		db = server.DEFAULT_DB
+	}
 	//	DEL|1\r\n
 	// 	AveryLooongKey\r\n
 	//	\x17\r\n
 
-	request := server.MagicD+"|1"+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
+	request := server.MagicD+"|1|"+db+server.CRLF+key+server.CRLF+server.ETB+server.CRLF
 	_, err = io.WriteString(c.sock, request)
 	if err != nil {
 		return
