@@ -92,8 +92,11 @@ docker run -d -p 2420:2420 -p 2240:2240 nodare-db
 
 This command will start the database as a Docker container in detached mode exposing ...
 ... UDP port 2240 of the container to port ```2240``` on your ```localhost```
+
 ... TCP port 2420 of the container to port ```2420``` on your ```localhost```
+
 ... TCP port 3420 of the container to port ```3420``` on your ```localhost```
+
 ... TCP port 4420 of the container to port ```4420``` on your ```localhost```
 
 ### Using TLS Version in Docker
@@ -124,7 +127,7 @@ This endpoint retrieves an item from the hashtable using a specific key.
 Example usage with cURL:
 
 ```bash
-curl -X GET http://localhost:2420/get/myKey
+curl -X GET http://localhost:2420/get/myKey/dbName
 ```
 
 ### SET /set
@@ -134,7 +137,7 @@ This endpoint inserts a new item into the hashtable. The request body should con
 Example usage with cURL:
 
 ```bash
-curl -X POST -d '{"myKey":"myValue"}' http://localhost:2420/set
+curl -X POST -d '{"myKey":"myValue"}' http://localhost:2420/set/dbName
 ```
 
 ### DELETE /del/{key}
@@ -144,13 +147,15 @@ This endpoint deletes an item from the hashtable using a specific key.
 Example usage with cURL:
 
 ```bash
-curl -X GET http://localhost:2420/del/myKey
+curl -X GET http://localhost:2420/del/myKey/dbName
 ```
 
 
 ## Example Usage
 
 Below is a simple example of how to use this database in a Go application:
+
+Parameter "/dbName" is optional. Defaults to DB string "0" if not supplied.
 
 ```go
 package main
@@ -163,14 +168,14 @@ import (
 
 func main() {
     // Example of inserting a new item
-    _, err := http.Post("http://localhost:2420/set", "application/json", bytes.NewBuffer([]byte(`{"myKey":"myValue"}`)))
+    _, err := http.Post("http://localhost:2420/set/dbName", "application/json", bytes.NewBuffer([]byte(`{"myKey":"myValue"}`)))
     if err != nil {
         fmt.Println("Error while inserting item:", err)
         return
     }
 
     // Example of retrieving an item
-    resp, err := http.Get("http://localhost:2420/get/myKey")
+    resp, err := http.Get("http://localhost:2420/get/myKey/dbName")
     if err != nil {
         fmt.Println("Error while retrieving item:", err)
         return
@@ -178,7 +183,7 @@ func main() {
     defer resp.Body.Close()
 
     // Example of deleting an item
-    req, err := http.Get("http://localhost:2420/del/myKey", nil)
+    req, err := http.Get("http://localhost:2420/del/myKey/dbName", nil)
     if err != nil {
         fmt.Println("Error while deleting item:", err)
         return
