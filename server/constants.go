@@ -92,6 +92,7 @@ const V_DEFAULT_NET_WEBSRV_READ_TIMEOUT = 5
 const V_DEFAULT_NET_WEBSRV_WRITE_TIMEOUT = 10
 const V_DEFAULT_NET_WEBSRV_IDLE_TIMEOUT = 120
 const V_DEFAULT_SERVER_SOCKET_ACL = "127.0.0.1,::1"
+const V_DEFAULT_SERVER_WEB_ACL = "127.0.0.1,::1"
 
 // VIPER CONFIG KEYS
 const VK_ACCESS_SUPERADMIN_USER = "server.superadmin_user"
@@ -120,5 +121,6 @@ const VK_SERVER_SOCKET_PATH = "server.socket_path"
 const VK_SERVER_SOCKET_PORT_TCP = "server.socket_tcpport"
 const VK_SERVER_SOCKET_PORT_TLS = "server.socket_tlsport"
 const VK_SERVER_SOCKET_ACL = "server.socket_acl"
+const VK_SERVER_WEB_ACL = "server.web_acl"
 
 var Prof *prof.Profiler

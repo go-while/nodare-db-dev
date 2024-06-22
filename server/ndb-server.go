@@ -5,11 +5,13 @@ import (
 	"github.com/go-while/nodare-db-dev/database"
 	"github.com/go-while/nodare-db-dev/logger"
 	"github.com/gorilla/mux"
+	"net"
 	"net/http"
+	"strings"
 )
 
 type WebMux interface {
-	CreateMux() *mux.Router
+	CreateMux(cfg VConfig) *mux.Router
 	HandlerGetValByKey(w http.ResponseWriter, r *http.Request)
 	HandlerSet(w http.ResponseWriter, r *http.Request)
 	HandlerDel(w http.ResponseWriter, r *http.Request)
@@ -18,16 +20,18 @@ type WebMux interface {
 type XNDBServer struct {
 	dbs  *database.XDBS
 	logs ilog.ILOG
+	acl  *AccessControlList
 }
 
 func NewXNDBServer(dbs *database.XDBS, logs ilog.ILOG) *XNDBServer {
 	return &XNDBServer{
 		dbs:   dbs,
 		logs: logs,
+		acl: NewACL(),
 	}
 }
 
-func (srv *XNDBServer) CreateMux() *mux.Router {
+func (srv *XNDBServer) CreateMux(cfg VConfig) *mux.Router {
 	r := mux.NewRouter()
 	//r.HandleFunc("/jkv/{"+KEY_PARAM+"}", srv.HandlerGetJsonBlobByKey)
 	//r.HandleFunc("/jnv/{"+KEY_PARAM+"}", srv.HandlerGetJsonValByKey)
@@ -38,15 +42,29 @@ func (srv *XNDBServer) CreateMux() *mux.Router {
 	r.HandleFunc("/del/{"+KEY_PARAM+"}/{"+DB_PARAM+"}", srv.HandlerDel)
 	r.HandleFunc("/set", srv.HandlerSet)
 	r.HandleFunc("/set/{"+DB_PARAM+"}", srv.HandlerSet)
+
+	iplist := cfg.GetString(VK_SERVER_WEB_ACL)
+	if iplist != "" {
+		ips := strings.Split(iplist, ",")
+		for _, ip := range ips {
+			srv.logs.Info("WEB ACL allow IP: %s", ip)
+			srv.acl.SetACL(ip, true)
+		}
+	}
 	return r
 }
 
 func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request) {
 	nilheader(w)
+	if !srv.acl.checkACL_IP(GetIpAddress(r)) {
+		w.WriteHeader(http.StatusForbidden) // 403
+		srv.logs.Warn("web /get Forbidden by ACL ip='%s'", GetIpAddress(r))
+		return
+	}
 
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		srv.logs.Warn("server /get/ method not allowed ")
+		srv.logs.Warn("web /get method not allowed: ip='%s'", GetIpAddress(r))
 		return
 	}
 
@@ -58,12 +76,12 @@ func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request
 	}
 
 	xdb := DEFAULT_DB
-	if vars["db"] != "" {
-		xdb = vars["db"]
+	if vars[DB_PARAM] != "" {
+		xdb = vars[DB_PARAM]
 	}
 	db := srv.dbs.GetDB(xdb, false)
 	if db == nil {
-		srv.logs.Info("HandlerGetValByKey DB ident='%s' not found. key='%s'", xdb, key)
+		srv.logs.Error("HandlerGetValByKey DB NIL ident='%s' key='%s'", xdb, key)
 		w.WriteHeader(http.StatusGone) // 410
 		return
 	}
@@ -71,7 +89,7 @@ func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request
 	var val string
 	found := db.Get(key, &val)
 	if !found {
-		srv.logs.Info("HandlerGetValByKey not found key='%s'", key)
+		srv.logs.Debug("HandlerGetValByKey not found key='%s'", key)
 		w.WriteHeader(http.StatusGone) // 410
 		return
 	}
@@ -102,24 +120,34 @@ func (srv *XNDBServer) HandlerGetValByKey(w http.ResponseWriter, r *http.Request
 	//w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(val))
+	//srv.logs.Debug("web /get db='%s' key='%s' val='%s' ip='%s'", xdb, key, val, GetIpAddress(r))
 } // end func HandlerGetValByKey
 
 func (srv *XNDBServer) HandlerSet(w http.ResponseWriter, r *http.Request) {
 	nilheader(w)
 
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+	if !srv.acl.checkACL_IP(GetIpAddress(r)) {
+		w.WriteHeader(http.StatusForbidden) // 403
+		srv.logs.Warn("web /set Forbidden by ACL ip='%s'", GetIpAddress(r))
 		return
 	}
 
-	vars := mux.Vars(r)
-	ident := DEFAULT_DB
-	if vars["db"] != "" {
-		ident = vars["db"]
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		srv.logs.Warn("web /set method not allowed: ip='%s'", GetIpAddress(r))
+		return
 	}
-	db := srv.dbs.GetDB(ident, true)
+
+
+	vars := mux.Vars(r)
+	xdb := DEFAULT_DB
+	if vars[DB_PARAM] != "" {
+		xdb = vars[DB_PARAM]
+	}
+	db := srv.dbs.GetDB(xdb, true)
 	if db == nil {
-		w.WriteHeader(http.StatusForbidden) // 403
+		srv.logs.Error("HandlerSet DB NIL ident='%s'", xdb)
+		w.WriteHeader(http.StatusGone) // 410
 		return
 	}
 
@@ -140,14 +168,21 @@ func (srv *XNDBServer) HandlerSet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusCreated)
+	//srv.logs.Debug("web /set db='%s' data='%#v' ip='%s'", xdb, data, GetIpAddress(r))
 } // end func HandlerSet
 
 func (srv *XNDBServer) HandlerDel(w http.ResponseWriter, r *http.Request) {
-	srv.logs.Warn("HandlerDel")
 	nilheader(w)
+
+	if !srv.acl.checkACL_IP(GetIpAddress(r)) {
+		w.WriteHeader(http.StatusForbidden) // 403
+		srv.logs.Warn("web /del Forbidden by ACL ip='%s'", GetIpAddress(r))
+		return
+	}
+
 	if r.Method != http.MethodGet {
-		srv.logs.Warn("HandlerDel r.Method != http.MethodGet")
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		srv.logs.Warn("web /del method not allowed: ip='%s'", GetIpAddress(r))
 		return
 	}
 
@@ -157,15 +192,15 @@ func (srv *XNDBServer) HandlerDel(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotAcceptable) // 406
 		return
 	}
-	srv.logs.Debug("HandlerDel key='%s'", key)
+	//srv.logs.Debug("HandlerDel key='%s'", key)
 
-	ident := DEFAULT_DB
-	if vars["db"] != "" {
-		ident = vars["db"]
+	xdb := DEFAULT_DB
+	if vars[DB_PARAM] != "" {
+		xdb = vars[DB_PARAM]
 	}
-	db := srv.dbs.GetDB(ident, false)
+	db := srv.dbs.GetDB(xdb, false)
 	if db == nil {
-		srv.logs.Info("HandlerDel DB ident='%s' not found. key='%s'", ident, key)
+		srv.logs.Error("HandlerDel DB NIL ident='%s' key='%s'", xdb, key)
 		w.WriteHeader(http.StatusGone) // 410
 		return
 	}
@@ -176,6 +211,7 @@ func (srv *XNDBServer) HandlerDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+	//srv.logs.Debug("web /del db='%s' key='%s' ip='%s'", xdb, key, GetIpAddress(r))
 } // end func HandlerDel
 
 func (srv *XNDBServer) SetLogLvl(w http.ResponseWriter, r *http.Request) {
@@ -199,4 +235,14 @@ func nilheader(w http.ResponseWriter) {
 	w.Header()["Content-Length"] = nil
 	w.Header()["X-Content-Type-Options"] = nil
 	w.Header()["Transfer-Encoding"] = nil
+}
+
+func GetIpAddress(r *http.Request) (host string) {
+	host, _, _ = net.SplitHostPort(r.RemoteAddr)
+	return
+}
+
+func GetXforwarded(r *http.Request) (xf string) {
+	xf = r.Header.Get("X-Forwarded-For")
+	return
 }

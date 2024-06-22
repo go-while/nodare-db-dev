@@ -22,6 +22,7 @@ type HttpServer struct {
 	logs       ilog.ILOG
 	stop_chan  chan struct{}
 	wg         sync.WaitGroup
+	acl        *AccessControlList
 } // end struct HttpServer
 
 type HttpsServer struct {
@@ -31,6 +32,7 @@ type HttpsServer struct {
 	logs        ilog.ILOG
 	stop_chan   chan struct{}
 	wg          sync.WaitGroup
+	acl         *AccessControlList
 } // end struct HttpsServer
 
 func NewHttpServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup) (srv *HttpServer) {
@@ -40,18 +42,19 @@ func NewHttpServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, stop_chan chan
 		cfg:       cfg,
 		stop_chan: stop_chan,
 		wg:        wg,
+		acl:       NewACL(),
 	}
 	return
 } // end func NewHttpServer
 
 func NewHttpsServer(cfg VConfig, ndbServer WebMux, logs ilog.ILOG, stop_chan chan struct{}, wg sync.WaitGroup) (srv *HttpsServer) {
 	srv = &HttpsServer{
-		//sigChan:   make(chan os.Signal, 1),
 		ndbServer: ndbServer,
 		logs:      logs,
 		cfg:       cfg,
 		stop_chan: stop_chan,
 		wg:        wg,
+		acl:       NewACL(),
 	}
 	return
 } // end func NewHttpsServer
@@ -63,7 +66,7 @@ func (server *HttpServer) Start() {
 		WriteTimeout: time.Duration(WTO) * time.Second,
 		IdleTimeout:  time.Duration(ITO) * time.Second,
 		Addr:         fmt.Sprintf("%s:%s", server.cfg.GetString(VK_SERVER_HOST), server.cfg.GetString(VK_SERVER_PORT_TCP)),
-		Handler:      server.ndbServer.CreateMux(),
+		Handler:      server.ndbServer.CreateMux(server.cfg),
 	}
 	server.wg.Add(1)
 	go func() {
@@ -99,7 +102,7 @@ func (server *HttpsServer) Start() {
 		WriteTimeout: time.Duration(WTO) * time.Second,
 		IdleTimeout:  time.Duration(ITO) * time.Second,
 		Addr:         fmt.Sprintf("%s:%s", server.cfg.GetString(VK_SERVER_HOST), server.cfg.GetString(VK_SERVER_PORT_TCP)),
-		Handler:      server.ndbServer.CreateMux(),
+		Handler:      server.ndbServer.CreateMux(server.cfg),
 	}
 	server.wg.Add(1)
 	go func() {
@@ -129,3 +132,5 @@ func (server *HttpsServer) Stop() {
 	}
 	server.logs.Info("HttpsServer: stopped")
 } // end func httpsServer interface Stop()
+
+

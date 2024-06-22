@@ -92,6 +92,7 @@ func (c *ViperConfig) createDefaultConfigFile(cfgFile string) {
 	c.viper.SetDefault(VK_SERVER_SOCKET_PORT_TCP, DEFAULT_SERVER_SOCKET_TCP_PORT)
 	c.viper.SetDefault(VK_SERVER_SOCKET_PORT_TLS, DEFAULT_SERVER_SOCKET_TLS_PORT)
 	c.viper.SetDefault(VK_SERVER_SOCKET_ACL, V_DEFAULT_SERVER_SOCKET_ACL)
+	c.viper.SetDefault(VK_SERVER_WEB_ACL, V_DEFAULT_SERVER_WEB_ACL)
 
 	log.Printf("WriteConfigAs %s", cfgFile)
 	if c.logs.IfDebug() {
@@ -126,11 +127,12 @@ func (c *ViperConfig) mapEnvsToConf() {
 
 	c.mapsEnvsToConfig[VK_SERVER_HOST] = "NDB_HOST"
 	c.mapsEnvsToConfig[VK_SERVER_PORT_TCP] = "NDB_PORT"
-	c.mapsEnvsToConfig[VK_SERVER_PORT_UDP] = "SERVER_UDP_PORT"
-	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PATH] = "SERVER_SOCKET_PATH"
-	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TCP] = "SERVER_SOCKET_TCP_PORT"
-	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TLS] = "SERVER_SOCKET_TLS_PORT"
-	c.mapsEnvsToConfig[VK_SERVER_SOCKET_ACL] = "SERVER_SOCKET_ACL"
+	c.mapsEnvsToConfig[VK_SERVER_PORT_UDP] = "NDB_SERVER_UDP_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PATH] = "NDB_SERVER_SOCKET_PATH"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TCP] = "NDB_SERVER_SOCKET_TCP_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_PORT_TLS] = "NDB_SERVER_SOCKET_TLS_PORT"
+	c.mapsEnvsToConfig[VK_SERVER_SOCKET_ACL] = "NDB_SERVER_SOCKET_ACL"
+	c.mapsEnvsToConfig[VK_SERVER_WEB_ACL] = "NDB_SERVER_WEB_ACL"
 
 }
 

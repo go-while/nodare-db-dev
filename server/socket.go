@@ -748,6 +748,10 @@ func (a *AccessControlList) checkACL(conn net.Conn) bool {
 	return a.IsAllowed(getRemoteIP(conn))
 }
 
+func (a *AccessControlList) checkACL_IP(ip string) bool {
+	return a.IsAllowed(ip)
+}
+
 type AccessControlList struct {
 	mux sync.RWMutex
 	acl map[string]bool
@@ -773,6 +777,9 @@ func (a *AccessControlList) SetupACL() {
 }
 
 func (a *AccessControlList) IsAllowed(ip string) bool {
+	if ip == "" {
+		return false
+	}
 	a.mux.RLock()
 	retval := a.acl[ip]
 	a.mux.RUnlock()
