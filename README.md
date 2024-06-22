@@ -91,6 +91,7 @@ docker run -d -p 2420:2420 -p 2240:2240 nodare-db
 ```
 
 This command will start the database as a Docker container in detached mode exposing ...
+
 ... UDP port 2240 of the container to port ```2240``` on your ```localhost```
 
 ... TCP port 2420 of the container to port ```2420``` on your ```localhost```
