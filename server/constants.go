@@ -62,7 +62,6 @@ const (
 	// socket proto flags
 	KEY_LIMIT = 1024 * 1024 * 1024 // respond: CAN
 	VAL_LIMIT = 1024 * 1024 * 1024 // respond: CAN
-	//EmptyStr = ""
 	CR = "\r"
 	LF = "\n"
 	CRLF = CR + LF
@@ -129,6 +128,9 @@ const (
 
 
 	// ENV KEYS
+	ENVK_NDB_SUPERADMIN = "NDB_SUPERADMIN"
+	ENVK_NDB_SADMINPASS = "NDB_SADMINPASS"
+
 	ENVK_LOGLEVEL = "LOGLEVEL"
 	ENVK_LOGSFILE = "LOGSFILE"
 

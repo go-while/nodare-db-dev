@@ -100,14 +100,14 @@ func (c *ViperConfig) createDefaultConfigFile(cfgFile string) {
 	}
 	c.viper.WriteConfigAs(cfgFile)
 
-	fmt.Printf("\n IMPORTANT!\n  Generated ADMIN credentials!\n     login: '%s'\n     password: '%s'\n\n ==> createDefaultConfigFile OK\n", suadminuser, suadminpass)
+	fmt.Printf("\n IMPORTANT!\n  Generated ADMIN credentials!\n     login: '%s'\n     password: '%s'\n\n ==> createDefaultConfigFile OK\n", suadminuser, suadminpass) // !TODO
 
 } // end func createDefaultConfigFile
 
 func (c *ViperConfig) mapEnvsToConf() {
 
-	c.mapsEnvsToConfig[VK_ACCESS_SUPERADMIN_USER] = "NDB_SUPERADMIN"
-	c.mapsEnvsToConfig[VK_ACCESS_SUPERADMIN_PASS] = "NDB_SADMINPASS"
+	c.mapsEnvsToConfig[VK_ACCESS_SUPERADMIN_USER] = ENVK_NDB_SUPERADMIN
+	c.mapsEnvsToConfig[VK_ACCESS_SUPERADMIN_PASS] = ENVK_NDB_SADMINPASS
 
 	c.mapsEnvsToConfig[VK_LOG_LOGLEVEL] = ENVK_LOGLEVEL
 	c.mapsEnvsToConfig[VK_LOG_LOGFILE] = ENVK_LOGSFILE
