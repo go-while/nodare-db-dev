@@ -52,10 +52,10 @@ const (
 	// client proto flags
 	Magic1 = "1" // mem-prof
 	Magic2 = "2" // cpu-prof
-	MagicA = "A" // add
+	//MagicA = "A" // add !TODO
 	MagicD = "D" // del
 	MagicG = "G" // get
-	MagicL = "L" // list
+	//MagicL = "L" // list !TODO
 	MagicS = "S" // set
 	MagicZ = "Z" // quit
 
