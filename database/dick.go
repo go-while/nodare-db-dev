@@ -160,7 +160,7 @@ func (d *XDICK) keyIndex(key string, idx *string, idi *uint32, ind *uint32, hk *
 		//*ind = fastModN(hashedKey, d.SubDICKsSLI[*idi].dickTable.sizemask) % d.SubDICKsSLI[*idi].dickTable.sizemask
 		//d.SubDICKsSLI[*idi].submux.RUnlock()
 
-		d.logs.Info("key=%s d.SubCount=%d idi='%d' ind='%d' sm=%d hk=%d", key, d.SubCount, *idi, *ind, d.SubDICKsSLI[*idi].dickTable.sizemask, hashedKey)
+		//d.logs.Debug("key=%s d.SubCount=%d idi='%d' ind='%d' sm=%d hk=%d", key, d.SubCount, *idi, *ind, d.SubDICKsSLI[*idi].dickTable.sizemask, hashedKey)
 
 	} // end switch SYSMODE
 
