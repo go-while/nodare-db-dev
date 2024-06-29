@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	INITIAL_SIZE = int64(1024 * 1024) // multiplied by subdicks = unique keys
-	MAX_SIZE     = 1 << 63
+	INITIAL_SIZE = uint32(1024*1024) // multiplied by subdicks = unique keys
 	MAPMODE      = 1
 	SLIMODE      = 2
 	HASH_siphash = 0x01
@@ -46,8 +45,8 @@ type XDICK struct {
 	mainmux     sync.RWMutex
 	SubDICKsMAP map[string]*SubDICK // key=string=idx
 	SubDICKsSLI []*SubDICK          // key=int=idi
-	SubDepth    int
-	SubCount    uint64
+	SubDepth    uint32
+	SubCount    uint32
 	HashMode    int
 	logs        ilog.ILOG
 	pcas        *pcashash.Hash // hash go objects
@@ -67,7 +66,7 @@ func NewXDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDICK {
 	xdick := &XDICK{
 		pcas:     pcashash.New(),
 		mainmux:  mainmux,
-		SubCount: uint64(sub_dicks),
+		SubCount: uint32(sub_dicks),
 		HashMode: hashmode, // must not change on runtime
 		logs:     logs,
 	}
@@ -88,7 +87,7 @@ func NewXDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDICK {
 			logs.Fatal("invalid sub_dicks=%d! available: 10, 100, 1000, 10000", sub_dicks)
 		}
 		xdick.SubDICKsSLI = make([]*SubDICK, xdick.SubCount)
-		for idi := uint64(0); idi < xdick.SubCount; idi++ {
+		for idi := uint32(0); idi < xdick.SubCount; idi++ {
 			subDICK := &SubDICK{
 				parent:    xdick,
 				dickTable: NewDickTable(INITIAL_SIZE),
@@ -132,7 +131,7 @@ func NewXDICK(logs ilog.ILOG, sub_dicks int, hashmode int) *XDICK {
 	return xdick
 } // end func NewXDICK
 
-func (d *XDICK) keyIndex(key string, idx *string, idi *int64, ind *int64, hk *uint64) {
+func (d *XDICK) keyIndex(key string, idx *string, idi *uint32, ind *uint32, hk *uint32) {
 	switch SYSMODE {
 	case MAPMODE:
 		// generate a quick hash and cuts N chars to divide into sub_dicks 0__-f__
@@ -145,27 +144,53 @@ func (d *XDICK) keyIndex(key string, idx *string, idi *int64, ind *int64, hk *ui
 			generateCRC32AsString(key, d.SubDepth, idx)
 		case 3:
 			// uses FNV1
-			generateFNV1aHash(key, d.SubDepth, idx)
+			generateFNV1aHashString(key, d.SubDepth, idx)
 		default:
-			d.logs.Fatal("Invalid HashMode")
+			d.logs.Fatal("MAPMODE: Invalid HashMode")
 		}
 
 	case SLIMODE:
-		hashedKey := d.hasher(key)
+		hashedKey := d.hasher32(key)
 		if hk != nil {
 			*hk = hashedKey
 		}
-		*idi = int64(hashedKey % d.SubCount) // last digits
+		*idi = hashedKey % d.SubCount // last digits
 		d.SubDICKsSLI[*idi].submux.RLock()
-		*ind = int64(hashedKey & d.SubDICKsSLI[*idi].dickTable.sizemask)
+		*ind = hashedKey & d.SubDICKsSLI[*idi].dickTable.sizemask
+		//*ind = fastModN(hashedKey, d.SubDICKsSLI[*idi].dickTable.sizemask)
 		d.SubDICKsSLI[*idi].submux.RUnlock()
 	} // end switch SYSMODE
 
 	//d.logs.Debug("key=%s idx='%#v' idi='%#v' index='%#v'", key, *idx, *idi, *ind)
 } // end func KeyIndex
 
-// main hasher func
-func (d *XDICK) hasher(key string) uint64 {
+func fastModN(x, n uint32) uint32 {
+    return uint32((uint64(x) * uint64(n)) >> 32)
+}
+
+func fastModN64(x, n uint64) int64 {
+	return int64(x * n >> 32)
+}
+
+func (d *XDICK) hasher32(key string) uint32 {
+	switch d.HashMode {
+
+	case HASH_FNV32A:
+		hash := fnv.New32a()
+		hash.Write([]byte(key))
+		return hash.Sum32()
+
+	case HASH_PCAS:
+		return pcashash.String(key)
+
+	default:
+		d.logs.Fatal("hasher32 Invalid HashMode: available: HASH_FNV32A=%d HASH_PCAS=%d", HASH_FNV32A, HASH_PCAS)
+	}
+	d.logs.Fatal("No HASHER defined! HASHER=%d %x", HASHER, HASHER)
+	return 0
+} // end func hasher32
+
+func (d *XDICK) hasher64(key string) uint64 {
 	switch d.HashMode {
 
 	case HASH_siphash:
@@ -211,10 +236,9 @@ func (d *XDICK) Set(key string, value string, overwrite bool) bool {
 		return true
 
 	case SLIMODE:
-		var idi, ind int64
-		var hashedKey uint64
+		var idi, ind, hashedKey uint32
 		d.keyIndex(key, nil, &idi, &ind, &hashedKey)
-		d.logs.Debug("SLIMODE Set(key='%s' idi=%d ind=%d hashedKey=%d", key, idi, ind, hashedKey)
+		//d.logs.Debug("SLIMODE Set(key='%s' idi=%d ind=%d hashedKey=%d", key, idi, ind, hashedKey)
 		exists, added := d.SetEntry(idi, ind, key, value, overwrite)
 		if overwrite && exists {
 			return false
@@ -229,19 +253,21 @@ func (d *XDICK) Set(key string, value string, overwrite bool) bool {
 	return false
 } // end func Set
 
-func (d *XDICK) SetEntry(idi int64, ind int64, key string, value string, overwrite bool) (exists bool, added bool) {
+func (d *XDICK) SetEntry(idi uint32, ind uint32, key string, value string, overwrite bool) (exists bool, added bool) {
+	//d.logs.Debug("SetEntry [%d:%d] k='%v' v='%v'", idi, ind, key, value)
 
-	d.logs.Debug("SetEntry [%d:%d] k='%v' v='%v'", idi, ind, key, value)
+	//d.SubDICKsSLI[idi].dickTable.tmux.Lock()
+	//defer d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
 
 	if d.GetEntry(idi, ind, true) == nil {
 		// create new entry
 		d.SubDICKsSLI[idi].dickTable.tmux.Lock()
 		if d.SubDICKsSLI[idi].dickTable.tableSLI[ind] == nil {
 			d.SubDICKsSLI[idi].dickTable.tableSLI[ind] = &DickEntry{key: key, value: value}
+			d.usedInc(idi)
 			d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
 			added = true
-			used := d.usedInc(idi)
-			d.logs.Debug("SetEntry [%d:%d] NEW key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, key, exists, overwrite, added, used)
+			//d.logs.Debug("SetEntry [%d:%d] NEW key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, key, exists, overwrite, added, used)
 			return
 		}
 		d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
@@ -250,25 +276,26 @@ func (d *XDICK) SetEntry(idi int64, ind int64, key string, value string, overwri
 	var load int64
 	// find entries matching our key to set new value
 	var prev *DickEntry = nil
-	for entry := d.GetEntry(idi, ind, true); entry != nil; entry = entry.next {
-		entry.emux.RLock()
+	//for entry := d.GetEntry(idi, ind, true); entry != nil; entry = entry.next {
+	for entry := d.SubDICKsSLI[idi].dickTable.tableSLI[ind]; entry != nil; entry = entry.next {
+		entry.emux.Lock()
 		if entry.key == "" {
 			d.logs.Fatal("GetEntry entry.key empty?!")
 		}
 		if entry.key != key {
+			entry.emux.Unlock()
 			load++
 			prev = entry
-			entry.emux.RUnlock()
 			continue
 		}
-		entry.emux.RUnlock()
+
 		// got match
 		if !overwrite {
 			exists = true
-			//d.logs.Debug("SetEntry [%d:%d] RET load=%d key='%s' exists=%t overwrite=%t added=%t", idi, ind, load, key, exists, overwrite, added)
+			d.logs.Warn("SetEntry [%d:%d] RET load=%d key='%s' exists=%t overwrite=%t added=%t", idi, ind, load, key, exists, overwrite, added)
+			entry.emux.Unlock()
 			return
 		}
-		entry.emux.Lock()
 		// update to new value
 		entry.value = value
 		entry.emux.Unlock()
@@ -283,8 +310,8 @@ func (d *XDICK) SetEntry(idi int64, ind int64, key string, value string, overwri
 		prev.next = &DickEntry{key: key, value: value, prev: prev}
 		d.setEntryLoad(idi, ind, load)
 		added = true
-		used := d.usedInc(idi)
-		d.logs.Debug("SetEntry [%d:%d] ADD load=%d key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, load, key, exists, overwrite, added, used)
+		d.usedInc(idi)
+		//d.logs.Debug("SetEntry [%d:%d] ADD load=%d key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, load, key, exists, overwrite, added, used)
 		return
 	}
 
@@ -305,13 +332,14 @@ func (d *XDICK) Get(key string, val *string) (containsKey bool) {
 		}
 		d.SubDICKsMAP[idx].submux.RUnlock()
 	case SLIMODE:
-		var idi, ind int64
+		var idi, ind uint32
 		//var hashedKey uint64
 		d.keyIndex(key, nil, &idi, &ind, nil)
 		//loops := 0
 		for entry := d.GetEntry(idi, ind, true); entry != nil; entry = entry.next {
-			entry.emux.RLock()
+			//
 			if entry.key == key {
+				entry.emux.RLock()
 				*val = entry.value
 				entry.emux.RUnlock()
 				//if loops > 0 {
@@ -319,7 +347,7 @@ func (d *XDICK) Get(key string, val *string) (containsKey bool) {
 				//}
 				return true
 			}
-			entry.emux.RUnlock()
+			//entry.emux.RUnlock()
 			//loops++
 		} // end for entry
 	}
@@ -342,7 +370,7 @@ func (d *XDICK) Del(key string) bool {
 		}
 
 	case SLIMODE:
-		var idi, ind int64
+		var idi, ind uint32
 		//var hashedKey uint64
 		d.keyIndex(key, nil, &idi, &ind, nil)
 		d.logs.Info("DelEntry key='%s' idi=%d ind=%d", key, idi, ind)
@@ -444,7 +472,7 @@ var HEXCHARS = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "
 
 // generateHexCombinations generates all combinations of hex characters up to the given depth.
 // It takes the current depth, the current combination being built, and a pointer to a slice to store the results.
-func generateHexCombinations(depth int, current string, combinations *[]string) {
+func generateHexCombinations(depth uint32, current string, combinations *[]string) {
 	// Base case: if depth is 0, add the current combination to the results
 	if depth == 0 {
 		*combinations = append(*combinations, current)
@@ -456,11 +484,11 @@ func generateHexCombinations(depth int, current string, combinations *[]string) 
 	}
 } // end func generateHexCombinations
 
-func (d *XDICK) DelEntry(idi int64, ind int64) {
+func (d *XDICK) DelEntry(idi uint32, ind uint32) {
 	d.SubDICKsSLI[idi].dickTable.tableSLI[ind] = nil
 } // end func DelEntry
 
-func (d *XDICK) GetEntry(idi int64, ind int64, doRLock bool) (entry *DickEntry) {
+func (d *XDICK) GetEntry(idi uint32, ind uint32, doRLock bool) (entry *DickEntry) {
 	if doRLock {
 		d.SubDICKsSLI[idi].dickTable.tmux.RLock()
 	}
@@ -474,39 +502,39 @@ func (d *XDICK) GetEntry(idi int64, ind int64, doRLock bool) (entry *DickEntry) 
 	return
 } // end func GetEntry
 
-func (d *XDICK) EntryExists(idi int64, ind int64) (exists bool) {
+func (d *XDICK) EntryExists(idi uint32, ind uint32) (exists bool) {
 	//d.SubDICKsSLI[idi].dickTable.tmux.RLock()
 	exists = d.SubDICKsSLI[idi].dickTable.tableSLI[ind] != nil
 	//d.SubDICKsSLI[idi].dickTable.tmux.RUnlock()
 	return
 } // end func EntryExists
 
-func (d *XDICK) setEntryLoad(idi int64, ind int64, load int64) {
+func (d *XDICK) setEntryLoad(idi uint32, ind uint32, load int64) {
 	d.SubDICKsSLI[idi].dickTable.tableSLI[ind].load = load
 } // end func setLoad of table
 
-func (d *XDICK) getEntryLoad(idi int64, ind int64) (load int64) {
+func (d *XDICK) getEntryLoad(idi uint32, ind uint32) (load int64) {
 	//d.SubDICKsSLI[idi].dickTable.tmux.RLock()
 	load = d.SubDICKsSLI[idi].dickTable.tableSLI[ind].load
 	//d.SubDICKsSLI[idi].dickTable.tmux.RUnlock()
 	return
 } // end func setLoad of table
 
-func (d *XDICK) getUsed(idi int64) (used int64) {
-	d.SubDICKsSLI[idi].dickTable.tmux.RLock()
+func (d *XDICK) getUsed(idi uint32) (used uint64) {
+	//d.SubDICKsSLI[idi].dickTable.tmux.RLock()
 	used = d.SubDICKsSLI[idi].dickTable.used
-	d.SubDICKsSLI[idi].dickTable.tmux.RUnlock()
+	//d.SubDICKsSLI[idi].dickTable.tmux.RUnlock()
 	return
 }
-func (d *XDICK) usedInc(idi int64) (used int64) {
-	d.SubDICKsSLI[idi].dickTable.tmux.Lock()
+func (d *XDICK) usedInc(idi uint32) (used uint64) {
+	//d.SubDICKsSLI[idi].dickTable.tmux.Lock()
 	d.SubDICKsSLI[idi].dickTable.used++
 	used = d.SubDICKsSLI[idi].dickTable.used
-	d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
+	//d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
 	return
 } // end func usedIncrease
 
-func (d *XDICK) usedDec(idi int64) (used int64) {
+func (d *XDICK) usedDec(idi uint32) (used uint64) {
 	d.SubDICKsSLI[idi].dickTable.used--
 	used = d.SubDICKsSLI[idi].dickTable.used
 	return
@@ -534,7 +562,7 @@ func (d *XDICK) split(key [16]byte) (uint64, uint64) {
 	return key0, key1
 }
 
-func generateCRC32AsString(input string, sd int, output *string) {
+func generateCRC32AsString(input string, sd uint32, output *string) {
 	byteSlice := []byte(input)
 	hash := crc32.NewIEEE()
 	hash.Write(byteSlice)
@@ -542,9 +570,15 @@ func generateCRC32AsString(input string, sd int, output *string) {
 	*output = fmt.Sprintf("%04x", checksum)[:sd]
 }
 
-func generateFNV1aHash(input string, sd int, output *string) {
+func generateFNV1aHashString(input string, sd uint32, output *string) {
 	hash := fnv.New32a()
 	hash.Write([]byte(input))
 	hashValue := hash.Sum32()
 	*output = fmt.Sprintf("%04x", hashValue)[:sd]
+}
+
+func generateFNV1aHashInt(input string, hashValue *uint32) {
+	hash := fnv.New32a()
+	hash.Write([]byte(input))
+	*hashValue = hash.Sum32()
 }

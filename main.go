@@ -33,7 +33,7 @@ func main() {
 	flag.StringVar(&flag_logfile, "logfile", "", "path to ndb.log")
 	flag.StringVar(&flag_pprofweb, "pprofweb", "", "PPROF WEB: [ (addr):port ]\n     LOCAL '127.0.0.1:1234' OR '[::1]:1234'\n     PUBLIC/WORLD ':1234' OR 'IP4:PORT' OR '[IP6]:PORT'")
 	flag.BoolVar(&flag_profcpu, "profcpu", false, "boot with CPU profiling")
-	flag.IntVar(&flag_hashmode, "hashmode", 4, "SysMode 1) [ 1=PCAS | 2=CRC32 | 3=FNV1A ]\nSysMode 2) [ 1=sipHash | 2=FNV32A | 3=FNV64A | 4=XXHASH | 5=PCAS ]\n")
+	flag.IntVar(&flag_hashmode, "hashmode", 2, "SysMode 1) [ 1=PCAS | 2=CRC32 | 3=FNV1A ]\nSysMode 2) [ 2=FNV32A 5=PCAS ]\n")
 	flag.IntVar(&flag_sysmode, "sysmode", 2, "[ 1=MAP | 2=SLI ]")
 	flag.StringVar(&flag_loglevel, "loglevel", "", "[ INFO | DEBUG ]")
 	flag.Parse()
