@@ -155,13 +155,16 @@ func (d *XDICK) keyIndex(key string, idx *string, idi *uint32, ind *uint32, hk *
 			*hk = hashedKey
 		}
 		*idi = hashedKey % d.SubCount // last digits
-		d.SubDICKsSLI[*idi].submux.RLock()
-		*ind = hashedKey & d.SubDICKsSLI[*idi].dickTable.sizemask
-		//*ind = fastModN(hashedKey, d.SubDICKsSLI[*idi].dickTable.sizemask)
-		d.SubDICKsSLI[*idi].submux.RUnlock()
+		//d.SubDICKsSLI[*idi].submux.RLock()
+		*ind = hashedKey % d.SubDICKsSLI[*idi].dickTable.sizemask
+		//*ind = fastModN(hashedKey, d.SubDICKsSLI[*idi].dickTable.sizemask) % d.SubDICKsSLI[*idi].dickTable.sizemask
+		//d.SubDICKsSLI[*idi].submux.RUnlock()
+
+		d.logs.Info("key=%s d.SubCount=%d idi='%d' ind='%d' sm=%d hk=%d", key, d.SubCount, *idi, *ind, d.SubDICKsSLI[*idi].dickTable.sizemask, hashedKey)
+
 	} // end switch SYSMODE
 
-	//d.logs.Debug("key=%s idx='%#v' idi='%#v' index='%#v'", key, *idx, *idi, *ind)
+
 } // end func KeyIndex
 
 func fastModN(x, n uint32) uint32 {
@@ -276,14 +279,13 @@ func (d *XDICK) SetEntry(idi uint32, ind uint32, key string, value string, overw
 	var load int64
 	// find entries matching our key to set new value
 	var prev *DickEntry = nil
-	//for entry := d.GetEntry(idi, ind, true); entry != nil; entry = entry.next {
 	for entry := d.SubDICKsSLI[idi].dickTable.tableSLI[ind]; entry != nil; entry = entry.next {
-		entry.emux.Lock()
+		entry.emux.RLock()
 		if entry.key == "" {
 			d.logs.Fatal("GetEntry entry.key empty?!")
 		}
 		if entry.key != key {
-			entry.emux.Unlock()
+			entry.emux.RUnlock()
 			load++
 			prev = entry
 			continue
@@ -293,10 +295,12 @@ func (d *XDICK) SetEntry(idi uint32, ind uint32, key string, value string, overw
 		if !overwrite {
 			exists = true
 			d.logs.Warn("SetEntry [%d:%d] RET load=%d key='%s' exists=%t overwrite=%t added=%t", idi, ind, load, key, exists, overwrite, added)
-			entry.emux.Unlock()
+			entry.emux.RUnlock()
 			return
 		}
+		entry.emux.RUnlock()
 		// update to new value
+		entry.emux.Lock()
 		entry.value = value
 		entry.emux.Unlock()
 		added = true
@@ -307,10 +311,14 @@ func (d *XDICK) SetEntry(idi uint32, ind uint32, key string, value string, overw
 	// did not find an entry matching our key
 	// adds new entry as next to prev and set this as prev.next and prev as next.prev ^^
 	if prev != nil && prev.next == nil {
+		prev.emux.Lock()
 		prev.next = &DickEntry{key: key, value: value, prev: prev}
+		prev.emux.Unlock()
+		d.SubDICKsSLI[idi].dickTable.tmux.Lock()
 		d.setEntryLoad(idi, ind, load)
-		added = true
 		d.usedInc(idi)
+		d.SubDICKsSLI[idi].dickTable.tmux.Unlock()
+		added = true
 		//d.logs.Debug("SetEntry [%d:%d] ADD load=%d key='%s' exists=%t overwrite=%t added=%t used=%d", idi, ind, load, key, exists, overwrite, added, used)
 		return
 	}
@@ -333,7 +341,6 @@ func (d *XDICK) Get(key string, val *string) (containsKey bool) {
 		d.SubDICKsMAP[idx].submux.RUnlock()
 	case SLIMODE:
 		var idi, ind uint32
-		//var hashedKey uint64
 		d.keyIndex(key, nil, &idi, &ind, nil)
 		//loops := 0
 		for entry := d.GetEntry(idi, ind, true); entry != nil; entry = entry.next {
@@ -368,6 +375,7 @@ func (d *XDICK) Del(key string) bool {
 			d.SubDICKsMAP[idx].submux.Unlock()
 			return true
 		}
+		return false
 
 	case SLIMODE:
 		var idi, ind uint32
