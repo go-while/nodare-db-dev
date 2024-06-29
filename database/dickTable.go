@@ -20,23 +20,33 @@ type MapEntry struct {
 }
 
 type DickTable struct {
-	load     int64
+	load     uint64
 	tmux     sync.RWMutex
-	tableSLI []*DickEntry
+	//tableSLI []*Buckets
+	tableSLI []*DickEntry  // hashedKey
 	tableMAP map[string]*MapEntry
-	size     int64
-	used     int64
-	sizemask uint64
+	size     uint32
+	used     uint64
+	sizemask uint32
 }
 
-func NewDickTable(size int64) (dt *DickTable) {
+type Buckets []*Bucket
+type Bucket []*DickEntry
+
+func NewDickTable(size uint32) (dt *DickTable) {
 	dt = &DickTable{}
 	switch SYSMODE {
 	case MAPMODE:
 		dt.tableMAP = make(map[string]*MapEntry, size)
 	case SLIMODE:
 		dt.tableSLI = make([]*DickEntry, size)
-		dt.sizemask = uint64(size - 1)
+		/*
+		dt.tableSLI = make([]*Buckets, size)
+		for i := 0; i < size; i++ {
+			dt.tableSLI[i] = make([]*Bucket, size)
+		}
+		*/
+		dt.sizemask = size - 1
 	}
 	dt.size = size
 	log.Printf("NewDickTable size=%d sizemask=%d", dt.size, dt.sizemask)
